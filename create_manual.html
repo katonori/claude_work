@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create モッド アイテム使い方マニュアル</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .toc {
+            background: #f8f9fa;
+            padding: 20px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .toc h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .toc-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .toc-item {
+            background: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .toc-item:hover {
+            background: #667eea;
+            color: white;
+            transform: translateX(5px);
+        }
+
+        .toc-item a {
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .content {
+            padding: 40px 20px;
+        }
+
+        .item-section {
+            margin-bottom: 50px;
+            scroll-margin-top: 100px;
+        }
+
+        .item-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 12px;
+            padding: 30px;
+            border-left: 5px solid #667eea;
+            box-shadow: 0 4px 15px rgba(102,126,234,0.1);
+        }
+
+        .item-header {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .item-icon {
+            width: 80px;
+            height: 80px;
+            background: white;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            flex-shrink: 0;
+        }
+
+        .item-icon svg {
+            width: 70px;
+            height: 70px;
+        }
+
+        .item-title {
+            flex: 1;
+        }
+
+        .item-title h2 {
+            color: #667eea;
+            font-size: 1.8em;
+            margin-bottom: 5px;
+        }
+
+        .item-title p {
+            color: #666;
+            font-style: italic;
+        }
+
+        .item-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+
+        .item-content h3 {
+            color: #764ba2;
+            margin-top: 15px;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .item-content h3:first-child {
+            margin-top: 0;
+        }
+
+        .item-content ul {
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+
+        .item-content li {
+            margin-bottom: 8px;
+            color: #555;
+        }
+
+        .usage-example {
+            background: #f0f4ff;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 3px solid #667eea;
+            margin: 15px 0;
+            font-size: 0.95em;
+        }
+
+        .highlight {
+            background: #fff3cd;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 500;
+        }
+
+        .tip {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 12px 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+
+        .tip::before {
+            content: "💡 ヒント: ";
+            font-weight: bold;
+            color: #155724;
+        }
+
+        .warning {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 12px 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+
+        .warning::before {
+            content: "⚠️ 注意: ";
+            font-weight: bold;
+            color: #721c24;
+        }
+
+        .item-number {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 35px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            border-top: 2px solid #667eea;
+        }
+
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 1.8em;
+            }
+
+            .item-header {
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+            }
+
+            .item-icon {
+                width: 70px;
+                height: 70px;
+            }
+
+            .item-icon svg {
+                width: 60px;
+                height: 60px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚙️ Create モッド</h1>
+            <p>アイテム使い方マニュアル</p>
+        </header>
+
+        <div class="toc">
+            <h2>📋 アイテム一覧</h2>
+            <div class="toc-grid">
+                <div class="toc-item"><a href="#item-1">🔧 Wrench</a></div>
+                <div class="toc-item"><a href="#item-2">🔩 Mechanical Press</a></div>
+                <div class="toc-item"><a href="#item-3">🥣 Mechanical Mixer</a></div>
+                <div class="toc-item"><a href="#item-4">👓 Goggles</a></div>
+                <div class="toc-item"><a href="#item-5">⚡ Gearbox</a></div>
+                <div class="toc-item"><a href="#item-6">🔨 Mechanical Drill</a></div>
+                <div class="toc-item"><a href="#item-7">🚀 Deployer</a></div>
+                <div class="toc-item"><a href="#item-8">⚙️ Sequenced Gearshift</a></div>
+                <div class="toc-item"><a href="#item-9">🔪 Mechanical Saw</a></div>
+                <div class="toc-item"><a href="#item-10">🌀 Mechanical Bearing</a></div>
+            </div>
+        </div>
+
+        <div class="content">
+            <!-- Item 1: Wrench -->
+            <div class="item-section" id="item-1">
+                <div class="item-card">
+                    <div class="item-header">
+                        <div class="item-icon">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="20" y="60" width="50" height="15" fill="#c0c0c0" rx="7"/>
+                                <circle cx="45" cy="67" r="12" fill="none" stroke="#808080" stroke-width="3"/>
+                                <rect x="50" y="10" width="15" height="55" fill="#c0c0c0" rx="7"/>
+                                <circle cx="58" cy="15" r="8" fill="#ffa500"/>
+                            </svg>
+                        </div>
+                        <div class="item-title">
+                            <h2><span class="item-number">1</span>Wrench（レンチ）</h2>
+                            <p>機械を回転・調整する基本工具</p>
+                        </div>
+                    </div>
+                    <div class="item-content">
+                        <h3>📝 説明</h3>
+                        <p>WrenチはCreateモッドの基本となる工具です。機械ブロックを回転させたり、回転方向を変更したりできます。</p>
+
+                        <h3>🎯 使い方</h3>
+                        <ul>
+                            <li>機械ブロックを<span class="highlight">右クリック</span>して回転方向を変更</li>
+                            <li>Shiftを押しながら右クリックで機械の回転速度を確認</li>
+                            <li>空中で右クリックするとWrenchが回転</li>
+                        </ul>
+
+                        <div class="usage-example">
+                            <strong>使用例:</strong> Shaft（シャフト）の回転方向を変えたい場合、Wrenチで直接クリックして方向を設定できます。
+                        </div>
+
+                        <div class="tip">Wrenチは無限に使用でき、耐久度がありません。複数個所の機械を素早く調整できます。</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Item 2: Mechanical Press -->
+            <div class="item-section" id="item-2">
+                <div class="item-card">
+                    <div class="item-header">
+                        <div class="item-icon">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="30" y="20" width="40" height="70" fill="#8b7355" stroke="#3d3d3d" stroke-width="2"/>
+                                <rect x="35" y="25" width="30" height="10" fill="#696969"/>
+                                <circle cx="50" cy="65" r="12" fill="#d4a574"/>
+                                <rect x="25" y="78" width="50" height="8" fill="#696969"/>
+                            </svg>
+                        </div>
+                        <div class="item-title">
+                            <h2><span class="item-number">2</span>Mechanical Press（機械プレス）</h2>
+                            <p>アイテムを圧縮・成形する重要な機械</p>
+                        </div>
+                    </div>
+                    <div class="item-content">
+                        <h3>📝 説明</h3>
+                        <p>回転動力を受け取り、上から下に押し下げる動作でアイテムを加工します。鉱石の圧縮、インゴットの成形など多くのレシピに対応。</p>
+
+                        <h3>🎯 使い方</h3>
+                        <ul>
+                            <li>Shaftで回転動力を供給（下または横から接続可能）</li>
+                            <li>上部にアイテムを投入（ホッパーなどで自動化可能）</li>
+                            <li>加工後のアイテムは下に落ちる</li>
+                            <li>複数のPressを縦に重ねることで連続加工も可能</li>
+                        </ul>
+
+                        <h3>⚙️ 必要な回転速度</h3>
+                        <p>通常のレシピ: <span class="highlight">32 RPM以上推奨</span></p>
+
+                        <div class="usage-example">
+                            <strong>使用例:</strong> 鉄鉱石をプレスして鉄粉に加工し、さらに別のプレスで圧縮してダイヤモンドを生成。
+                        </div>
+
+                        <div class="tip">複数のプレスを組み合わせることで複雑なアイテム加工パイプラインを構築できます。</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Item 3: Mechanical Mixer -->
+            <div class="item-section" id="item-3">
+                <div class="item-card">
+                    <div class="item-header">
+                        <div class="item-icon">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="30" y="30" width="40" height="35" fill="#6b4423" stroke="#3d3d3d" stroke-width="2"/>
+                                <circle cx="50" cy="70" r="15" fill="#c0c0c0"/>
+                                <line x1="40" y1="50" x2="60" y2="50" stroke="#ffd700" stroke-width="3" stroke-linecap="round"/>
+                                <line x1="50" y1="40" x2="50" y2="60" stroke="#ffd700" stroke-width="3" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="item-title">
+                            <h2><span class="item-number">3</span>Mechanical Mixer（機械ミキサー）</h2>
+                            <p>複数のアイテムを混ぜ合わせる機械</p>
+                        </div>
+                    </div>
+                    <div class="item-content">
+                        <h3>📝 説明</h3>
+                        <p>回転動力を受け取り、タンク内のアイテムと液体を混ぜてクラフトします。粘土や洗浄バッグなど、複数材料の加工に使用。</p>
+
+                        <h3>🎯 使い方</h3>
+                        <ul>
+                            <li>Shaftで回転動力を供給（横から接続）</li>
+                            <li>必要な材料をタンクに投入</li>
+                            <li>適切な回転が行われると自動的に混合開始</li>
+                            <li>完成したアイテムは下のホッパーに流出</li>
+                        </ul>
+
+                        <h3>⚙️ 必要な回転速度</h3>
+                        <p>通常のレシピ: <span class="highlight">24 RPM以上推奨</span></p>
+
+                        <div class="usage-example">
+                            <strong>使用例:</strong> 洗った鉱石粉とセメントダストを混ぜて、セメント粉を生成。
+                        </div>
+
+                        <div class="warning">タンク内の液体がオーバーフローしないよう注意してください。</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Item 4: Goggles -->
+            <div class="item-section" id="item-4">
+                <div class="item-card">
+                    <div class="item-header">
+                        <div class="item-icon">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="35" cy="50" r="15" fill="#1a1a1a" stroke="#c0c0c0" stroke-width="2"/>
+                                <circle cx="65" cy="50" r="15" fill="#1a1a1a" stroke="#c0c0c0" stroke-width="2"/>
+                                <rect x="50" y="48" width="15" height="4" fill="#c0c0c0"/>
+                                <path d="M 20 50 Q 15 45 10 50 Q 15 55 20 50" fill="#c0c0c0"/>
+                                <path d="M 80 50 Q 85 45 90 50 Q 85 55 80 50" fill="#c0c0c0"/>
+                                <circle cx="35" cy="50" r="8" fill="#4dd0e1" opacity="0.6"/>
+                                <circle cx="65" cy="50" r="8" fill="#4dd0e1" opacity="0.6"/>
+                            </svg>
+                        </div>
+                        <div class="item-title">
+                            <h2><span class="item-number">4</span>Goggles（ゴーグル）</h2>
+                            <p>機械の情報を表示する装備品</p>
+                        </div>
+                    </div>
+                    <div class="item-content">
+                        <h3>📝 説明</h3>
+                        <p>頭部に装備するアイテムで、Createの機械ブロックを見るときに詳細な情報が表示されます。.</p>
+
+                        <h3>🎯 使い方</h3>
+                        <ul>
+                            <li>インベントリから頭部スロットに装備</li>
+                            <li>装備後、機械ブロックを見ると回転速度などの情報が表示</li>
+                            <li>スニークしながら見ると、さらに詳細な情報が表示</li>
+                        </ul>
+
+                        <h3>📊 表示される情報</h3>
+                        <ul>
+                            <li><span class="highlight">回転速度 (RPM)</span> - 機械の回転速度</li>
+                            <li><span class="highlight">応力 (Stress)</span> - 現在の負荷状態</li>
+                            <li><span class="highlight">回転方向</span> - 時計回りまたは反時計回り</li>
+                            <li><span class="highlight">状態</span> - 動作中か停止中か</li>
+                        </ul>
+
+                        <div class="tip">Goggleを装備することで、機械システムの問題箇所を素早く発見できます。</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Item 5: Gearbox -->
+            <div class="item-section" id="item-5">
+                <div class="item-card">
+                    <div class="item-header">
+                        <div class="item-icon">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="15" y="15" width="70" height="70" fill="#8b7355" stroke="#3d3d3d" stroke-width="2" rx="5"/>
+                                <circle cx="50" cy="50" r="30" fill="none" stroke="#ffd700" stroke-width="3"/>
+                                <circle cx="30" cy="30" r="8" fill="#ffd700"/>
+                                <circle cx="70" cy="30" r="8" fill="#ffd700"/>
+                                <circle cx="30" cy="70" r="8" fill="#ffd700"/>
+                                <circle cx="70" cy="70" r="8" fill="#ffd700"/>
+                                <circle cx="50" cy="50" r="6" fill="#696969"/>
+                            </svg>
+                        </div>
+                        <div class="item-title">
+                            <h2><span class="item-number">5</span>Gearbox（ギアボックス）</h2>
+                            <p>回転動力の方向を変更する機械</p>
+                        </div>
+                    </div>
+                    <div class="item-content">
+                        <h3>📝 説明</h3>
+                        <p>複数の方向から回転動力を受け取り、別の方向に動力を転送できます。複雑な機械配置に必須のパーツ。</p>
+
+                        <h3>🎯 使い方</h3>
+                        <ul>
+                            <li>Shaftを6面全てに接続可能</li>
+                            <li>一つの面から受け取った動力を他の面に転送</li>
+                            <li>複数の動力ソースを組み合わせることも可能</li>
+                            <li>Wrenchiで接続面を指定</li>
+                        </ul>
+
+                        <div class="usage-example">
+                            <strong>使用例:</strong> 風車の上下動力を横方向に変更して、離れた場所の機械を動かす。
+                        </div>
+
+                        <div class="tip">Gearboxは動力の転送のみで、速度比は変わりません（1:1）。速度変更にはOther gearboxesを使用してください。</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Item 6: Mechanical Drill -->
+            <div class="item-section" id="item-6">
+                <div class="item-card">
+                    <div class="item-header">
+                        <div class="item-icon">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="40" y="10" width="20" height="60" fill="#c0c0c0" stroke="#3d3d3d" stroke-width="1"/>
+                                <circle cx="50" cy="70" r="12" fill="#ffa500"/>
+                                <rect x="45" y="82" width="10" height="12" fill="#8b7355"/>
+                                <path d="M 50 70 L 45 80 L 55 80 Z" fill="#333"/>
+                            </svg>
+                        </div>
+                        <div class="item-title">
+                            <h2><span class="item-number">6</span>Mechanical Drill（機械ドリル）</h2>
+                            <p>回転動力で鉱石を自動採掘する機械</p>
+                        </div>
+                    </div>
+                    <div class="item-content">
+                        <h3>📝 説明</h3>
+                        <p>回転動力を受けると、その前方のブロックを掘削して鉱石を採集します。採掘スピードはRPMに依存。</p>
+
+                        <h3>🎯 使い方</h3>
+                        <ul>
+                            <li>Shaftで回転動力を供給（上下どちらでも可）</li>
+                            <li>ドリルの向いている方向の鉱石を自動採掘</li>
+                            <li>採掘速度 = RPM / 100 ブロック/秒</li>
+                            <li>採掘されたアイテムは下方向に落ちる</li>
+                        </ul>
+
+                        <h3>⚙️ 必要な回転速度</h3>
+                        <p>採掘速度向上: <span class="highlight">RPM が高いほど高速</span></p>
+
+                        <div class="usage-example">
+                            <strong>使用例:</strong> 64 RPMで動作させると、毎秒0.64ブロックの速度で採掘開始。
+                        </div>
+
+                        <div class="warning">ドリルの前のブロックが固い場合、採掘にかかる時間が増加します。</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Item 7: Deployer -->
+            <div class="item-section" id="item-7">
+                <div class="item-card">
+                    <div class="item-header">
+                        <div class="item-icon">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="25" y="20" width="50" height="50" fill="#8b7355" stroke="#3d3d3d" stroke-width="2"/>
+                                <rect x="35" y="30" width="30" height="30" fill="#d4a574"/>
+                                <circle cx="50" cy="45" r="8" fill="none" stroke="#3d3d3d" stroke-width="2"/>
+                                <rect x="20" y="75" width="60" height="15" fill="#c0c0c0"/>
+                                <line x1="50" y1="75" x2="50" y2="60" stroke="#696969" stroke-width="2"/>
+                            </svg>
+                        </div>
+                        <div class="item-title">
+                            <h2><span class="item-number">7</span>Deployer（デプロイヤー）</h2>
+                            <p>アイテムを配置・適用する多目的機械</p>
+                        </div>
+                    </div>
+                    <div class="item-content">
+                        <h3>📝 説明</h3>
+                        <p>回転動力を受け取り、インベントリ内のアイテムを世界に配置したり、他のアイテムに適用したりできます。</p>
+
+                        <h3>🎯 使い方</h3>
+                        <ul>
+                            <li>Shaftで回転動力を供給（あらゆる方向から可能）</li>
+                            <li>内部にホッパーでアイテムを投入</li>
+                            <li>回転状態が続く間、アイテムを繰り返し適用</li>
+                            <li>配置方向を変更可能（Wrenchiで調整）</li>
+                        </ul>
+
+                        <h3>📋 Deployerの用途</h3>
+                        <ul>
+                            <li><span class="highlight">オブザーバー付きチェスト</span>: ペイント塗布</li>
+                            <li><span class="highlight">耕地</span>: 耕すまたは種まき</li>
+                            <li><span class="highlight">ブロック</span>: 配置</li>
+                        </ul>
+
+                        <div class="tip">複数のDeployerを組み合わせることで、複雑な自動化パイプラインを構築できます。</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Item 8: Sequenced Gearshift -->
+            <div class="item-section" id="item-8">
+                <div class="item-card">
+                    <div class="item-header">
+                        <div class="item-icon">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="20" y="30" width="60" height="40" fill="#8b7355" stroke="#3d3d3d" stroke-width="2" rx="5"/>
+                                <circle cx="35" cy="50" r="8" fill="#ffd700"/>
+                                <circle cx="65" cy="50" r="8" fill="#ffd700"/>
+                                <rect x="40" y="48" width="20" height="4" fill="#c0c0c0"/>
+                                <rect x="25" y="75" width="50" height="8" fill="#696969" rx="2"/>
+                                <text x="50" y="70" font-size="12" fill="#fff" text-anchor="middle" font-weight="bold">SEQ</text>
+                            </svg>
+                        </div>
+                        <div class="item-title">
+                            <h2><span class="item-number">8</span>Sequenced Gearshift（シーケンスギアシフト）</h2>
+                            <p>複雑な制御を実現する高度な機械</p>
+                        </div>
+                    </div>
+                    <div class="item-content">
+                        <h3>📝 説明</h3>
+                        <p>特定の条件に基づいて、回転動力の供給をコントロールできる高度な機械。複雑な自動化パイプラインに必須。</p>
+
+                        <h3>🎯 使い方</h3>
+                        <ul>
+                            <li>Shaftで回転動力を供給</li>
+                            <li>GUI で複数の<span class="highlight">シーケンス条件</span>を設定</li>
+                            <li>条件が満たされている時のみ、指定方向に動力を転送</li>
+                            <li>複数の条件を組み合わせて順序制御が可能</li>
+                        </ul>
+
+                        <h3>⚙️ 設定可能な条件</h3>
+                        <ul>
+                            <li>タイマー条件 - 指定時間が経過したか</li>
+                            <li>信号強度 - レッドストーン信号の強度</li>
+                            <li>インベントリ条件 - 特定のアイテムが存在するか</li>
+                        </ul>
+
+                        <div class="warning">複雑な設定が必要なため、初心者向けではありません。まず基本的な機械システムを理解してから使用してください。</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Item 9: Mechanical Saw -->
+            <div class="item-section" id="item-9">
+                <div class="item-card">
+                    <div class="item-header">
+                        <div class="item-icon">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="50" cy="50" r="30" fill="none" stroke="#c0c0c0" stroke-width="4"/>
+                                <path d="M 60 50 L 70 60 L 60 70 L 50 60 Z M 40 50 L 30 60 L 40 70 L 50 60 Z" fill="#ffd700" stroke="#ffa500" stroke-width="1"/>
+                                <rect x="45" y="10" width="10" height="30" fill="#8b7355"/>
+                                <circle cx="50" cy="50" r="5" fill="#696969"/>
+                            </svg>
+                        </div>
+                        <div class="item-title">
+                            <h2><span class="item-number">9</span>Mechanical Saw（機械ノコギリ）</h2>
+                            <p>回転動力で木材やブロックを切断加工する機械</p>
+                        </div>
+                    </div>
+                    <div class="item-content">
+                        <h3>📝 説明</h3>
+                        <p>回転する円形のノコギリでアイテムやブロックを切断します。原木を板に加工したり、複数に分割したりできます。</p>
+
+                        <h3>🎯 使い方</h3>
+                        <ul>
+                            <li>Shaftで回転動力を供給（上下どちらでも可）</li>
+                            <li>ノコギリの前後にホッパーを配置</li>
+                            <li>切断対象のアイテムを自動投入</li>
+                            <li>一定回転で切断動作を実行</li>
+                        </ul>
+
+                        <h3>⚙️ 切断可能なアイテム</h3>
+                        <ul>
+                            <li>原木 → 木の板</li>
+                            <li>石 → 石の煉瓦</li>
+                            <li>砂岩 → 砂岩の煉瓦</li>
+                            <li>その他のカスタムレシピ</li>
+                        </ul>
+
+                        <div class="usage-example">
+                            <strong>使用例:</strong> 大量の原木を自動で木の板に加工し、エネルギー源として活用。
+                        </div>
+
+                        <div class="tip">Mechanical Sawはプレスと異なり、横方向の配置でも動作します。</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Item 10: Mechanical Bearing -->
+            <div class="item-section" id="item-10">
+                <div class="item-card">
+                    <div class="item-header">
+                        <div class="item-icon">
+                            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="50" cy="50" r="35" fill="#8b7355" stroke="#3d3d3d" stroke-width="2"/>
+                                <circle cx="50" cy="50" r="25" fill="#d4a574" stroke="#3d3d3d" stroke-width="2"/>
+                                <circle cx="50" cy="50" r="15" fill="none" stroke="#ffd700" stroke-width="2"/>
+                                <rect x="48" y="10" width="4" height="40" fill="#c0c0c0"/>
+                                <circle cx="50" cy="50" r="6" fill="#696969"/>
+                            </svg>
+                        </div>
+                        <div class="item-title">
+                            <h2><span class="item-number">10</span>Mechanical Bearing（機械ベアリング）</h2>
+                            <p>ブロックを回転させる動力伝達部品</p>
+                        </div>
+                    </div>
+                    <div class="item-content">
+                        <h3>📝 説明</h3>
+                        <p>回転動力を受け取り、その上に乗ったブロックを回転させます。水車や独特な構造物を作成するのに活用。</p>
+
+                        <h3>🎯 使い方</h3>
+                        <ul>
+                            <li>Shaftで回転動力を供給（上から接続）</li>
+                            <li>Bearingの上にブロックを配置</li>
+                            <li>配置されたブロックが回転開始</li>
+                            <li>回転ブロック上に他のブロックを積む場合、Superglueで接着</li>
+                        </ul>
+
+                        <h3>📋 活用例</h3>
+                        <ul>
+                            <li><span class="highlight">水車</span> - 見た目の良いエネルギー生成装置</li>
+                            <li><span class="highlight">装飾</span> - 回転する柱や球体</li>
+                            <li><span class="highlight">アイテム搬送</span> - 回転するコンベヤー</li>
+                        </ul>
+
+                        <div class="usage-example">
+                            <strong>使用例:</strong> Windmill Bearingとビーム材を組み合わせて、風力発電装置を構築。
+                        </div>
+
+                        <div class="tip">Superglueというアイテムを使用することで、複雑な回転構造も実現可能です。</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>💡 このマニュアルは Minecraft Create モッド の基本的な使い方をまとめたものです。</p>
+            <p>より詳しい情報は、Create Mod Wiki (create.fandom.com) をご参照ください。</p>
+            <p style="margin-top: 15px; font-size: 0.9em; opacity: 0.7;">Last Updated: 2026-08-01</p>
+        </footer>
+    </div>
+</body>
+</html>
