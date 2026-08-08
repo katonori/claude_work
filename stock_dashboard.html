@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>株価ダッシュボード</title>
+<style>
+  :root{
+    --bg:#f4f5f7;
+    --card-bg:#ffffff;
+    --text:#1a1d23;
+    --text-dim:#6b7280;
+    --border:#e3e5e9;
+    --up:#0f9d58;
+    --up-bg:#e7f7ee;
+    --down:#d93025;
+    --down-bg:#fdebe9;
+    --flat:#6b7280;
+    --accent:#3b6fe0;
+    --accent-hover:#2f5bc0;
+    --error-bg:#fdecea;
+    --error-text:#8a1c14;
+    --shadow: 0 1px 2px rgba(0,0,0,0.06), 0 1px 6px rgba(0,0,0,0.04);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#14161a;
+      --card-bg:#1d2026;
+      --text:#eceef1;
+      --text-dim:#9aa1ac;
+      --border:#2c3038;
+      --up:#3ecf8e;
+      --up-bg:#123527;
+      --down:#f2665e;
+      --down-bg:#3a1a18;
+      --flat:#9aa1ac;
+      --accent:#5b8dfb;
+      --accent-hover:#7ba0fc;
+      --error-bg:#3a1a18;
+      --error-text:#f2a29d;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 1px 8px rgba(0,0,0,0.25);
+    }
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Hiragino Sans","Yu Gothic",sans-serif;
+    background:var(--bg);
+    color:var(--text);
+  }
+  header{
+    position:sticky;
+    top:0;
+    z-index:10;
+    background:var(--bg);
+    border-bottom:1px solid var(--border);
+    padding:16px 20px;
+  }
+  h1{
+    margin:0 0 4px;
+    font-size:1.4rem;
+  }
+  .subtitle{
+    margin:0 0 14px;
+    color:var(--text-dim);
+    font-size:0.82rem;
+    line-height:1.5;
+  }
+  .controls{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    align-items:center;
+  }
+  .controls input[type="text"]{
+    flex:1 1 260px;
+    min-width:200px;
+    padding:8px 10px;
+    border:1px solid var(--border);
+    border-radius:6px;
+    background:var(--card-bg);
+    color:var(--text);
+    font-size:0.9rem;
+  }
+  button, select{
+    padding:8px 12px;
+    border-radius:6px;
+    border:1px solid var(--border);
+    background:var(--card-bg);
+    color:var(--text);
+    font-size:0.85rem;
+    cursor:pointer;
+  }
+  button.primary{
+    background:var(--accent);
+    color:#fff;
+    border-color:var(--accent);
+  }
+  button.primary:hover{ background:var(--accent-hover); }
+  button:hover{ filter:brightness(0.97); }
+  .status-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-top:10px;
+    font-size:0.78rem;
+    color:var(--text-dim);
+    flex-wrap:wrap;
+    gap:6px;
+  }
+  #error-banner{
+    display:none;
+    margin:12px 20px 0;
+    padding:10px 14px;
+    background:var(--error-bg);
+    color:var(--error-text);
+    border-radius:6px;
+    font-size:0.85rem;
+  }
+  main{
+    padding:18px 20px 40px;
+  }
+  #grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));
+    gap:12px;
+  }
+  .card{
+    background:var(--card-bg);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:14px;
+    box-shadow:var(--shadow);
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    min-height:130px;
+  }
+  .card.loading{ opacity:0.55; }
+  .card .remove-btn{
+    position:absolute;
+    top:6px;
+    right:6px;
+    width:20px;
+    height:20px;
+    line-height:18px;
+    text-align:center;
+    padding:0;
+    border-radius:50%;
+    font-size:0.8rem;
+    color:var(--text-dim);
+    background:transparent;
+    border:1px solid transparent;
+  }
+  .card .remove-btn:hover{
+    color:var(--down);
+    border-color:var(--down);
+  }
+  .symbol-row{
+    display:flex;
+    align-items:baseline;
+    gap:6px;
+    padding-right:18px;
+  }
+  .symbol{
+    font-weight:700;
+    font-size:0.95rem;
+  }
+  .name{
+    color:var(--text-dim);
+    font-size:0.72rem;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .price{
+    font-size:1.55rem;
+    font-weight:700;
+    letter-spacing:-0.02em;
+  }
+  .change-row{
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    font-size:0.85rem;
+    font-weight:600;
+    padding:2px 7px;
+    border-radius:5px;
+    width:fit-content;
+  }
+  .change-row.up{ color:var(--up); background:var(--up-bg); }
+  .change-row.down{ color:var(--down); background:var(--down-bg); }
+  .change-row.flat{ color:var(--flat); background:transparent; padding:2px 0; }
+  .meta{
+    margin-top:auto;
+    display:flex;
+    justify-content:space-between;
+    font-size:0.68rem;
+    color:var(--text-dim);
+  }
+  .meta a{
+    color:var(--accent);
+    text-decoration:none;
+  }
+  .meta a:hover{ text-decoration:underline; }
+  .card.error .price{ font-size:0.85rem; color:var(--down); font-weight:500; }
+  footer{
+    padding:0 20px 30px;
+    color:var(--text-dim);
+    font-size:0.72rem;
+    line-height:1.6;
+  }
+  footer a{ color:var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>株価ダッシュボード</h1>
+  <p class="subtitle">
+    複数銘柄の株価を1ページにまとめて表示します。データ取得元は
+    <a href="https://stooq.com/" target="_blank" rel="noopener">Stooq</a>
+    です（Yahooファイナンスはブラウザから直接データ取得するとCORS制限で
+    ブロックされるため、同種の株価データを提供する代替ソースを利用しています）。
+    各カードの「Yahoo!ファイナンスで見る」リンクから公式ページでも確認できます。
+  </p>
+  <div class="controls">
+    <input type="text" id="symbol-input" placeholder="銘柄コードを追加 (例: 7203, AAPL, ^SPX) カンマ区切りで複数可">
+    <button class="primary" id="add-btn">追加</button>
+    <button id="refresh-btn">今すぐ更新</button>
+    <select id="interval-select">
+      <option value="0">自動更新: オフ</option>
+      <option value="30000">30秒ごと</option>
+      <option value="60000" selected>60秒ごと</option>
+      <option value="300000">5分ごと</option>
+    </select>
+    <button id="reset-btn">デフォルトに戻す</button>
+  </div>
+  <div class="status-row">
+    <span id="last-updated">未更新</span>
+    <span id="symbol-count"></span>
+  </div>
+</header>
+
+<div id="error-banner"></div>
+
+<main>
+  <div id="grid"></div>
+</main>
+
+<footer>
+  ※ 表示される株価は目安であり、取引判断には利用しないでください。数値は取得元の遅延・仕様に依存します。
+  銘柄コードは Stooq の表記に従います（米国株は末尾 .us、日本株は証券コード + .jp、指数は ^ 始まり。
+  例: AAPL.US, 7203.JP, ^SPX, ^NKX）。コード末尾を省略した場合、数字のみなら .jp、それ以外は .us を自動補完します。
+  設定（表示銘柄・更新間隔）はブラウザの localStorage に保存され、次回アクセス時も保持されます。
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  var DEFAULT_SYMBOLS = [
+    "7203.jp",  // トヨタ自動車
+    "6758.jp",  // ソニーグループ
+    "9984.jp",  // ソフトバンクグループ
+    "6501.jp",  // 日立製作所
+    "8306.jp",  // 三菱UFJフィナンシャル・グループ
+    "aapl.us",  // Apple
+    "msft.us",  // Microsoft
+    "googl.us", // Alphabet
+    "amzn.us",  // Amazon
+    "nvda.us",  // NVIDIA
+    "^nkx",     // 日経平均株価
+    "^spx"      // S&P 500
+  ];
+
+  var STORAGE_KEY = "stockDashboard.symbols.v1";
+  var INTERVAL_KEY = "stockDashboard.interval.v1";
+  var CHUNK_SIZE = 25;
+
+  var grid = document.getElementById("grid");
+  var symbolInput = document.getElementById("symbol-input");
+  var addBtn = document.getElementById("add-btn");
+  var refreshBtn = document.getElementById("refresh-btn");
+  var intervalSelect = document.getElementById("interval-select");
+  var resetBtn = document.getElementById("reset-btn");
+  var lastUpdatedEl = document.getElementById("last-updated");
+  var symbolCountEl = document.getElementById("symbol-count");
+  var errorBanner = document.getElementById("error-banner");
+
+  var symbols = loadSymbols();
+  var timerId = null;
+
+  function loadSymbols(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){
+        var parsed = JSON.parse(raw);
+        if(Array.isArray(parsed) && parsed.length) return parsed;
+      }
+    }catch(e){}
+    return DEFAULT_SYMBOLS.slice();
+  }
+
+  function saveSymbols(){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(symbols)); }catch(e){}
+  }
+
+  function normalizeSymbol(raw){
+    var s = raw.trim();
+    if(!s) return null;
+    if(s.indexOf("^") === 0){
+      return s.toLowerCase();
+    }
+    if(s.indexOf(".") !== -1){
+      return s.toLowerCase();
+    }
+    if(/^\d+$/.test(s)){
+      return s.toLowerCase() + ".jp";
+    }
+    return s.toLowerCase() + ".us";
+  }
+
+  function cardId(sym){
+    return "card-" + sym.replace(/[^a-z0-9\^]/gi, "_");
+  }
+
+  function yahooUrl(sym){
+    var base = sym.split(".")[0];
+    if(sym.indexOf("^") === 0){
+      var map = { "^spx": "%5EGSPC", "^nkx": "%5EN225", "^dji": "%5EDJI" };
+      return "https://finance.yahoo.com/quote/" + (map[sym] || encodeURIComponent(sym));
+    }
+    if(sym.endsWith(".jp")){
+      return "https://finance.yahoo.com/quote/" + base + ".T";
+    }
+    return "https://finance.yahoo.com/quote/" + base.toUpperCase();
+  }
+
+  function renderSkeleton(){
+    grid.innerHTML = "";
+    symbols.forEach(function(sym){
+      var card = document.createElement("div");
+      card.className = "card loading";
+      card.id = cardId(sym);
+      card.innerHTML =
+        '<button class="remove-btn" title="削除" data-sym="' + sym + '">×</button>' +
+        '<div class="symbol-row"><span class="symbol">' + sym.toUpperCase() + '</span></div>' +
+        '<div class="price">読込中…</div>';
+      grid.appendChild(card);
+    });
+    symbolCountEl.textContent = symbols.length + " 銘柄";
+    bindRemoveButtons();
+  }
+
+  function bindRemoveButtons(){
+    var buttons = grid.querySelectorAll(".remove-btn");
+    buttons.forEach(function(btn){
+      btn.onclick = function(){
+        var sym = btn.getAttribute("data-sym");
+        symbols = symbols.filter(function(s){ return s !== sym; });
+        saveSymbols();
+        renderSkeleton();
+        fetchAll();
+      };
+    });
+  }
+
+  function chunkArray(arr, size){
+    var out = [];
+    for(var i=0;i<arr.length;i+=size){
+      out.push(arr.slice(i, i+size));
+    }
+    return out;
+  }
+
+  function parseCsv(text){
+    var lines = text.split(/\r?\n/).filter(function(l){ return l.trim().length; });
+    return lines.map(function(line){
+      var parts = line.split(",");
+      if(parts.length < 8) return null;
+      var name = parts.slice(8).join(",").trim();
+      return {
+        symbol: (parts[0] || "").trim().toLowerCase(),
+        date: (parts[1] || "").trim(),
+        time: (parts[2] || "").trim(),
+        open: parseFloat(parts[3]),
+        high: parseFloat(parts[4]),
+        low: parseFloat(parts[5]),
+        close: parseFloat(parts[6]),
+        volume: parts[7] ? parts[7].trim() : "",
+        name: name
+      };
+    }).filter(Boolean);
+  }
+
+  function renderCard(sym, data){
+    var card = document.getElementById(cardId(sym));
+    if(!card) return;
+    card.classList.remove("loading");
+
+    var invalid = !data || isNaN(data.close) || data.date === "N/D";
+    if(invalid){
+      card.classList.add("error");
+      card.innerHTML =
+        '<button class="remove-btn" title="削除" data-sym="' + sym + '">×</button>' +
+        '<div class="symbol-row"><span class="symbol">' + sym.toUpperCase() + '</span></div>' +
+        '<div class="price">データ取得不可</div>' +
+        '<div class="meta"><span>コードを確認してください</span>' +
+        '<a href="' + yahooUrl(sym) + '" target="_blank" rel="noopener">Yahoo!で見る</a></div>';
+      bindRemoveButtons();
+      return;
+    }
+
+    card.classList.remove("error");
+    var change = data.close - data.open;
+    var changePct = data.open ? (change / data.open) * 100 : 0;
+    var dir = change > 0.0001 ? "up" : (change < -0.0001 ? "down" : "flat");
+    var arrow = dir === "up" ? "▲" : (dir === "down" ? "▼" : "―");
+    var sign = change > 0 ? "+" : "";
+
+    card.innerHTML =
+      '<button class="remove-btn" title="削除" data-sym="' + sym + '">×</button>' +
+      '<div class="symbol-row"><span class="symbol">' + sym.toUpperCase() + '</span>' +
+      (data.name ? '<span class="name" title="' + escapeHtml(data.name) + '">' + escapeHtml(data.name) + '</span>' : '') +
+      '</div>' +
+      '<div class="price">' + formatNumber(data.close) + '</div>' +
+      '<div class="change-row ' + dir + '">' + arrow + ' ' + sign + formatNumber(change) +
+      ' (' + sign + changePct.toFixed(2) + '%)</div>' +
+      '<div class="meta"><span>' + data.time + '</span>' +
+      '<a href="' + yahooUrl(sym) + '" target="_blank" rel="noopener">Yahoo!で見る</a></div>';
+    bindRemoveButtons();
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function formatNumber(n){
+    if(Math.abs(n) >= 1000){
+      return n.toLocaleString("ja-JP", {maximumFractionDigits:2});
+    }
+    return n.toFixed(2);
+  }
+
+  function fetchAll(){
+    if(!symbols.length){
+      errorBanner.style.display = "none";
+      return;
+    }
+    errorBanner.style.display = "none";
+    var chunks = chunkArray(symbols, CHUNK_SIZE);
+    var promises = chunks.map(function(chunk){
+      var url = "https://stooq.com/q/l/?s=" + chunk.join(",") + "&f=sd2t2ohlcvn&e=csv";
+      return fetch(url).then(function(res){
+        if(!res.ok) throw new Error("HTTP " + res.status);
+        return res.text();
+      }).then(function(text){
+        return parseCsv(text);
+      });
+    });
+
+    Promise.all(promises).then(function(results){
+      var rows = results.reduce(function(acc, r){ return acc.concat(r); }, []);
+      var bySymbol = {};
+      rows.forEach(function(r){ bySymbol[r.symbol] = r; });
+      symbols.forEach(function(sym){
+        renderCard(sym, bySymbol[sym]);
+      });
+      lastUpdatedEl.textContent = "最終更新: " + new Date().toLocaleTimeString("ja-JP");
+    }).catch(function(err){
+      errorBanner.style.display = "block";
+      errorBanner.textContent = "データ取得に失敗しました（通信環境またはデータ提供元の制限の可能性があります）: " + err.message;
+    });
+  }
+
+  function scheduleAutoRefresh(){
+    if(timerId){ clearInterval(timerId); timerId = null; }
+    var ms = parseInt(intervalSelect.value, 10);
+    if(ms > 0){
+      timerId = setInterval(fetchAll, ms);
+    }
+  }
+
+  addBtn.addEventListener("click", function(){
+    var raw = symbolInput.value;
+    if(!raw.trim()) return;
+    var added = false;
+    raw.split(",").forEach(function(part){
+      var norm = normalizeSymbol(part);
+      if(norm && symbols.indexOf(norm) === -1){
+        symbols.push(norm);
+        added = true;
+      }
+    });
+    symbolInput.value = "";
+    if(added){
+      saveSymbols();
+      renderSkeleton();
+      fetchAll();
+    }
+  });
+
+  symbolInput.addEventListener("keydown", function(e){
+    if(e.key === "Enter") addBtn.click();
+  });
+
+  refreshBtn.addEventListener("click", fetchAll);
+
+  resetBtn.addEventListener("click", function(){
+    symbols = DEFAULT_SYMBOLS.slice();
+    saveSymbols();
+    renderSkeleton();
+    fetchAll();
+  });
+
+  intervalSelect.addEventListener("change", function(){
+    try{ localStorage.setItem(INTERVAL_KEY, intervalSelect.value); }catch(e){}
+    scheduleAutoRefresh();
+  });
+
+  (function initInterval(){
+    try{
+      var saved = localStorage.getItem(INTERVAL_KEY);
+      if(saved !== null){ intervalSelect.value = saved; }
+    }catch(e){}
+  })();
+
+  renderSkeleton();
+  fetchAll();
+  scheduleAutoRefresh();
+})();
+</script>
+
+</body>
+</html>
