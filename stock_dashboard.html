@@ -447,30 +447,50 @@
     return n.toFixed(2);
   }
 
-  // stooq.com が直接取得できない環境向けに、CORS対応の公開プロキシへ順に
-  // フォールバックする。直接取得できる環境ではプロキシは使われない。
-  var CORS_PROXIES = [
+  // stooq.com への直接fetchが失敗する環境向けに、複数のCORS対応公開プロキシへ
+  // 順にフォールバックする。ネットワークやプロキシの都合で「200 OKだが中身が
+  // エラーページ」というケースもあるため、応答内容が実際にCSVらしいかも検証する。
+  // slot 0 = 直接アクセス。一度成功した方法を覚えておき、次回はそこから試す。
+  var PROXY_BUILDERS = [
+    null,
     function(url){ return "https://api.allorigins.win/raw?url=" + encodeURIComponent(url); },
-    function(url){ return "https://corsproxy.io/?url=" + encodeURIComponent(url); }
+    function(url){ return "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url); },
+    function(url){ return "https://corsproxy.io/?url=" + encodeURIComponent(url); },
+    function(url){ return "https://thingproxy.freeboard.io/fetch/" + url; }
   ];
+  var lastWorkingProxy = null;
 
-  function fetchText(url){
-    return fetch(url).then(function(res){
-      if(!res.ok) throw new Error("HTTP " + res.status);
-      return res.text();
-    });
+  function looksLikeCsv(text, chunk){
+    if(!text) return false;
+    var head = text.slice(0, 500).toLowerCase();
+    if(head.indexOf("<html") !== -1 || head.indexOf("<!doctype") !== -1) return false;
+    return chunk.some(function(sym){ return head.indexOf(sym.toLowerCase()) !== -1; });
   }
 
-  function fetchWithFallback(url, proxyIndex){
-    if(proxyIndex === undefined){
-      return fetchText(url).catch(function(){ return fetchWithFallback(url, 0); });
+  function fetchChunk(chunk){
+    var url = "https://stooq.com/q/l/?s=" + chunk.join(",") + "&f=sd2t2ohlcvn&e=csv";
+    var order = [];
+    if(lastWorkingProxy !== null) order.push(lastWorkingProxy);
+    PROXY_BUILDERS.forEach(function(_, i){ if(i !== lastWorkingProxy) order.push(i); });
+
+    function attempt(pos){
+      if(pos >= order.length){
+        return Promise.reject(new Error("直接取得・プロキシ経由のいずれも失敗しました"));
+      }
+      var idx = order[pos];
+      var target = PROXY_BUILDERS[idx] ? PROXY_BUILDERS[idx](url) : url;
+      return fetch(target).then(function(res){
+        if(!res.ok) throw new Error("HTTP " + res.status);
+        return res.text();
+      }).then(function(text){
+        if(!looksLikeCsv(text, chunk)) throw new Error("不正な応答形式");
+        lastWorkingProxy = idx;
+        return text;
+      }).catch(function(){
+        return attempt(pos + 1);
+      });
     }
-    if(proxyIndex >= CORS_PROXIES.length){
-      throw new Error("直接取得・プロキシ経由のいずれも失敗しました");
-    }
-    return fetchText(CORS_PROXIES[proxyIndex](url)).catch(function(){
-      return fetchWithFallback(url, proxyIndex + 1);
-    });
+    return attempt(0).then(parseCsv);
   }
 
   function fetchAll(){
@@ -480,12 +500,7 @@
     }
     errorBanner.style.display = "none";
     var chunks = chunkArray(symbols, CHUNK_SIZE);
-    var promises = chunks.map(function(chunk){
-      var url = "https://stooq.com/q/l/?s=" + chunk.join(",") + "&f=sd2t2ohlcvn&e=csv";
-      return fetchWithFallback(url).then(function(text){
-        return parseCsv(text);
-      });
-    });
+    var promises = chunks.map(fetchChunk);
 
     Promise.all(promises).then(function(results){
       var rows = results.reduce(function(acc, r){ return acc.concat(r); }, []);
