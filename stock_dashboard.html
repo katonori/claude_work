@@ -66,6 +66,33 @@
     font-size:0.82rem;
     line-height:1.5;
   }
+  .apikey-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    align-items:center;
+    margin-bottom:10px;
+    padding:10px;
+    border:1px dashed var(--border);
+    border-radius:8px;
+  }
+  .apikey-row input[type="text"]{
+    flex:1 1 240px;
+    min-width:180px;
+    padding:8px 10px;
+    border:1px solid var(--border);
+    border-radius:6px;
+    background:var(--card-bg);
+    color:var(--text);
+    font-size:0.9rem;
+  }
+  .apikey-row a{
+    font-size:0.8rem;
+    color:var(--accent);
+    text-decoration:none;
+    white-space:nowrap;
+  }
+  .apikey-row a:hover{ text-decoration:underline; }
   .controls{
     display:flex;
     flex-wrap:wrap;
@@ -196,12 +223,19 @@
     margin-top:auto;
     display:flex;
     justify-content:space-between;
+    gap:6px;
     font-size:0.68rem;
     color:var(--text-dim);
+  }
+  .meta span{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
   }
   .meta a{
     color:var(--accent);
     text-decoration:none;
+    flex-shrink:0;
   }
   .meta a:hover{ text-decoration:underline; }
   .card.error .price{ font-size:0.85rem; color:var(--down); font-weight:500; }
@@ -220,21 +254,27 @@
   <h1>株価ダッシュボード</h1>
   <p class="subtitle">
     複数銘柄の株価を1ページにまとめて表示します。データ取得元は
-    <a href="https://stooq.com/" target="_blank" rel="noopener">Stooq</a>
-    です（Yahooファイナンスはブラウザから直接データ取得するとCORS制限で
-    ブロックされるため、同種の株価データを提供する代替ソースを利用しています）。
-    直接取得できない環境では、CORS対応の公開プロキシへ自動的に切り替えます。
-    各カードの「Yahoo!ファイナンスで見る」リンクから公式ページでも確認できます。
+    <a href="https://twelvedata.com/" target="_blank" rel="noopener">Twelve Data</a>
+    です。Yahooファイナンス自体はブラウザから直接データ取得するとCORS制限で
+    ブロックされ、無料の代替データソースも配信元の都合で不安定だったため、
+    ブラウザから直接アクセスされることを正式にサポートしているAPIに変更しました。
+    利用には無料のAPIキー登録が必要です。各カードの「Yahoo!ファイナンスで見る」
+    リンクから公式ページでも確認できます。
   </p>
+  <div class="apikey-row">
+    <input type="text" id="apikey-input" placeholder="Twelve DataのAPIキーを入力">
+    <button class="primary" id="apikey-save-btn">保存して更新</button>
+    <a href="https://twelvedata.com/pricing" target="_blank" rel="noopener">APIキーを無料取得 →</a>
+  </div>
   <div class="controls">
-    <input type="text" id="symbol-input" placeholder="銘柄コードを追加 (例: 7203, AAPL, ^SPX) カンマ区切りで複数可">
+    <input type="text" id="symbol-input" placeholder="銘柄コードを追加 (例: 7203, AAPL) カンマ区切りで複数可">
     <button class="primary" id="add-btn">追加</button>
     <button id="refresh-btn">今すぐ更新</button>
     <select id="interval-select">
       <option value="0">自動更新: オフ</option>
-      <option value="30000">30秒ごと</option>
-      <option value="60000" selected>60秒ごと</option>
-      <option value="300000">5分ごと</option>
+      <option value="60000">60秒ごと</option>
+      <option value="300000" selected>5分ごと</option>
+      <option value="900000">15分ごと</option>
     </select>
     <button id="reset-btn">デフォルトに戻す</button>
   </div>
@@ -252,9 +292,14 @@
 
 <footer>
   ※ 表示される株価は目安であり、取引判断には利用しないでください。数値は取得元の遅延・仕様に依存します。
-  銘柄コードは Stooq の表記に従います（米国株は末尾 .us、日本株は証券コード + .jp、指数は ^ 始まり。
-  例: AAPL.US, 7203.JP, ^SPX, ^NKX）。コード末尾を省略した場合、数字のみなら .jp、それ以外は .us を自動補完します。
-  設定（表示銘柄・更新間隔）はブラウザの localStorage に保存され、次回アクセス時も保持されます。
+  銘柄コードは数字のみなら東証(TSE)の証券コードとみなして自動的に「コード:TSE」形式に変換します
+  (例: 7203 → 7203:TSE)。米国株はティッカーをそのまま入力してください(例: AAPL)。
+  他市場の銘柄は「コード:取引所コード」の形式で入力できます。
+  Twelve Dataの無料プランは1分あたり8クレジット・1日800クレジットが目安の上限です
+  (銘柄1件の取得で概ね1クレジット消費)。銘柄数や更新頻度を増やすと上限に達しやすくなるため、
+  ご注意ください。設定(表示銘柄・更新間隔・APIキー)はブラウザの localStorage に保存され、
+  次回アクセス時も保持されます(APIキーはこの端末のブラウザ内にのみ保存され、Twelve Data以外の
+  外部サーバーには送信されません)。
 </footer>
 
 <script>
@@ -262,23 +307,20 @@
   "use strict";
 
   var DEFAULT_SYMBOLS = [
-    "7203.jp",  // トヨタ自動車
-    "6758.jp",  // ソニーグループ
-    "9984.jp",  // ソフトバンクグループ
-    "6501.jp",  // 日立製作所
-    "8306.jp",  // 三菱UFJフィナンシャル・グループ
-    "aapl.us",  // Apple
-    "msft.us",  // Microsoft
-    "googl.us", // Alphabet
-    "amzn.us",  // Amazon
-    "nvda.us",  // NVIDIA
-    "^nkx",     // 日経平均株価
-    "^spx"      // S&P 500
+    "7203:TSE", // トヨタ自動車
+    "6758:TSE", // ソニーグループ
+    "9984:TSE", // ソフトバンクグループ
+    "8306:TSE", // 三菱UFJフィナンシャル・グループ
+    "AAPL",     // Apple
+    "MSFT",     // Microsoft
+    "GOOGL",    // Alphabet
+    "AMZN"      // Amazon
   ];
 
   var STORAGE_KEY = "stockDashboard.symbols.v1";
   var INTERVAL_KEY = "stockDashboard.interval.v1";
-  var CHUNK_SIZE = 25;
+  var APIKEY_KEY = "stockDashboard.apikey.v1";
+  var CHUNK_SIZE = 8;
 
   var grid = document.getElementById("grid");
   var symbolInput = document.getElementById("symbol-input");
@@ -289,6 +331,8 @@
   var lastUpdatedEl = document.getElementById("last-updated");
   var symbolCountEl = document.getElementById("symbol-count");
   var errorBanner = document.getElementById("error-banner");
+  var apiKeyInput = document.getElementById("apikey-input");
+  var apiKeySaveBtn = document.getElementById("apikey-save-btn");
 
   var symbols = loadSymbols();
   var timerId = null;
@@ -311,32 +355,31 @@
   function normalizeSymbol(raw){
     var s = raw.trim();
     if(!s) return null;
-    if(s.indexOf("^") === 0){
-      return s.toLowerCase();
-    }
-    if(s.indexOf(".") !== -1){
-      return s.toLowerCase();
+    if(s.indexOf(":") !== -1){
+      var parts = s.split(":");
+      return parts[0].toUpperCase() + ":" + parts[1].toUpperCase();
     }
     if(/^\d+$/.test(s)){
-      return s.toLowerCase() + ".jp";
+      return s + ":TSE";
     }
-    return s.toLowerCase() + ".us";
+    return s.toUpperCase();
   }
 
   function cardId(sym){
-    return "card-" + sym.replace(/[^a-z0-9\^]/gi, "_");
+    return "card-" + sym.replace(/[^A-Za-z0-9]/g, "_");
   }
 
   function yahooUrl(sym){
-    var base = sym.split(".")[0];
-    if(sym.indexOf("^") === 0){
-      var map = { "^spx": "%5EGSPC", "^nkx": "%5EN225", "^dji": "%5EDJI" };
-      return "https://finance.yahoo.com/quote/" + (map[sym] || encodeURIComponent(sym));
+    if(sym.indexOf(":") !== -1){
+      var parts = sym.split(":");
+      var code = parts[0];
+      var exch = parts[1];
+      if(exch === "TSE"){
+        return "https://finance.yahoo.com/quote/" + code + ".T";
+      }
+      return "https://finance.yahoo.com/quote/" + code;
     }
-    if(sym.endsWith(".jp")){
-      return "https://finance.yahoo.com/quote/" + base + ".T";
-    }
-    return "https://finance.yahoo.com/quote/" + base.toUpperCase();
+    return "https://finance.yahoo.com/quote/" + sym;
   }
 
   function renderSkeleton(){
@@ -347,7 +390,7 @@
       card.id = cardId(sym);
       card.innerHTML =
         '<button class="remove-btn" title="削除" data-sym="' + sym + '">×</button>' +
-        '<div class="symbol-row"><span class="symbol">' + sym.toUpperCase() + '</span></div>' +
+        '<div class="symbol-row"><span class="symbol">' + sym + '</span></div>' +
         '<div class="price">読込中…</div>';
       grid.appendChild(card);
     });
@@ -376,66 +419,8 @@
     return out;
   }
 
-  function parseCsv(text){
-    var lines = text.split(/\r?\n/).filter(function(l){ return l.trim().length; });
-    return lines.map(function(line){
-      var parts = line.split(",");
-      if(parts.length < 8) return null;
-      var name = parts.slice(8).join(",").trim();
-      return {
-        symbol: (parts[0] || "").trim().toLowerCase(),
-        date: (parts[1] || "").trim(),
-        time: (parts[2] || "").trim(),
-        open: parseFloat(parts[3]),
-        high: parseFloat(parts[4]),
-        low: parseFloat(parts[5]),
-        close: parseFloat(parts[6]),
-        volume: parts[7] ? parts[7].trim() : "",
-        name: name
-      };
-    }).filter(Boolean);
-  }
-
-  function renderCard(sym, data){
-    var card = document.getElementById(cardId(sym));
-    if(!card) return;
-    card.classList.remove("loading");
-
-    var invalid = !data || isNaN(data.close) || data.date === "N/D";
-    if(invalid){
-      card.classList.add("error");
-      card.innerHTML =
-        '<button class="remove-btn" title="削除" data-sym="' + sym + '">×</button>' +
-        '<div class="symbol-row"><span class="symbol">' + sym.toUpperCase() + '</span></div>' +
-        '<div class="price">データ取得不可</div>' +
-        '<div class="meta"><span>コードを確認してください</span>' +
-        '<a href="' + yahooUrl(sym) + '" target="_blank" rel="noopener">Yahoo!で見る</a></div>';
-      bindRemoveButtons();
-      return;
-    }
-
-    card.classList.remove("error");
-    var change = data.close - data.open;
-    var changePct = data.open ? (change / data.open) * 100 : 0;
-    var dir = change > 0.0001 ? "up" : (change < -0.0001 ? "down" : "flat");
-    var arrow = dir === "up" ? "▲" : (dir === "down" ? "▼" : "―");
-    var sign = change > 0 ? "+" : "";
-
-    card.innerHTML =
-      '<button class="remove-btn" title="削除" data-sym="' + sym + '">×</button>' +
-      '<div class="symbol-row"><span class="symbol">' + sym.toUpperCase() + '</span>' +
-      (data.name ? '<span class="name" title="' + escapeHtml(data.name) + '">' + escapeHtml(data.name) + '</span>' : '') +
-      '</div>' +
-      '<div class="price">' + formatNumber(data.close) + '</div>' +
-      '<div class="change-row ' + dir + '">' + arrow + ' ' + sign + formatNumber(change) +
-      ' (' + sign + changePct.toFixed(2) + '%)</div>' +
-      '<div class="meta"><span>' + data.time + '</span>' +
-      '<a href="' + yahooUrl(sym) + '" target="_blank" rel="noopener">Yahoo!で見る</a></div>';
-    bindRemoveButtons();
-  }
-
   function escapeHtml(s){
-    return s.replace(/[&<>"']/g, function(c){
+    return String(s).replace(/[&<>"']/g, function(c){
       return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
     });
   }
@@ -447,72 +432,110 @@
     return n.toFixed(2);
   }
 
-  // stooq.com への直接fetchが失敗する環境向けに、複数のCORS対応公開プロキシへ
-  // 順にフォールバックする。ネットワークやプロキシの都合で「200 OKだが中身が
-  // エラーページ」というケースもあるため、応答内容が実際にCSVらしいかも検証する。
-  // slot 0 = 直接アクセス。一度成功した方法を覚えておき、次回はそこから試す。
-  var PROXY_BUILDERS = [
-    null,
-    function(url){ return "https://api.allorigins.win/raw?url=" + encodeURIComponent(url); },
-    function(url){ return "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url); },
-    function(url){ return "https://corsproxy.io/?url=" + encodeURIComponent(url); },
-    function(url){ return "https://thingproxy.freeboard.io/fetch/" + url; }
-  ];
-  var lastWorkingProxy = null;
-
-  function looksLikeCsv(text, chunk){
-    if(!text) return false;
-    var head = text.slice(0, 500).toLowerCase();
-    if(head.indexOf("<html") !== -1 || head.indexOf("<!doctype") !== -1) return false;
-    return chunk.some(function(sym){ return head.indexOf(sym.toLowerCase()) !== -1; });
+  function renderErrorCard(sym, message){
+    var card = document.getElementById(cardId(sym));
+    if(!card) return;
+    card.classList.remove("loading");
+    card.classList.add("error");
+    card.innerHTML =
+      '<button class="remove-btn" title="削除" data-sym="' + sym + '">×</button>' +
+      '<div class="symbol-row"><span class="symbol">' + sym + '</span></div>' +
+      '<div class="price">取得エラー</div>' +
+      '<div class="meta"><span title="' + escapeHtml(message) + '">' + escapeHtml(message) + '</span>' +
+      '<a href="' + yahooUrl(sym) + '" target="_blank" rel="noopener">Yahoo!で見る</a></div>';
+    bindRemoveButtons();
   }
 
-  function fetchChunk(chunk){
-    var url = "https://stooq.com/q/l/?s=" + chunk.join(",") + "&f=sd2t2ohlcvn&e=csv";
-    var order = [];
-    if(lastWorkingProxy !== null) order.push(lastWorkingProxy);
-    PROXY_BUILDERS.forEach(function(_, i){ if(i !== lastWorkingProxy) order.push(i); });
+  function renderCard(sym, entry){
+    var card = document.getElementById(cardId(sym));
+    if(!card) return;
+    card.classList.remove("loading");
 
-    function attempt(pos){
-      if(pos >= order.length){
-        return Promise.reject(new Error("直接取得・プロキシ経由のいずれも失敗しました"));
-      }
-      var idx = order[pos];
-      var target = PROXY_BUILDERS[idx] ? PROXY_BUILDERS[idx](url) : url;
-      return fetch(target).then(function(res){
-        if(!res.ok) throw new Error("HTTP " + res.status);
-        return res.text();
-      }).then(function(text){
-        if(!looksLikeCsv(text, chunk)) throw new Error("不正な応答形式");
-        lastWorkingProxy = idx;
-        return text;
-      }).catch(function(){
-        return attempt(pos + 1);
-      });
+    if(!entry){
+      renderErrorCard(sym, "データが見つかりません。銘柄コードを確認してください");
+      return;
     }
-    return attempt(0).then(parseCsv);
+    if(entry.status === "error"){
+      renderErrorCard(sym, entry.message || "APIエラー");
+      return;
+    }
+
+    var close = parseFloat(entry.close);
+    if(isNaN(close)){
+      renderErrorCard(sym, "データが見つかりません。銘柄コードを確認してください");
+      return;
+    }
+
+    card.classList.remove("error");
+    var change = parseFloat(entry.change);
+    var changePct = parseFloat(entry.percent_change);
+    if(isNaN(change)) change = 0;
+    if(isNaN(changePct)) changePct = 0;
+    var dir = change > 0.0001 ? "up" : (change < -0.0001 ? "down" : "flat");
+    var arrow = dir === "up" ? "▲" : (dir === "down" ? "▼" : "―");
+    var sign = change > 0 ? "+" : "";
+    var name = entry.name || "";
+    var updated = entry.datetime || "";
+
+    card.innerHTML =
+      '<button class="remove-btn" title="削除" data-sym="' + sym + '">×</button>' +
+      '<div class="symbol-row"><span class="symbol">' + sym + '</span>' +
+      (name ? '<span class="name" title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</span>' : '') +
+      '</div>' +
+      '<div class="price">' + formatNumber(close) + '</div>' +
+      '<div class="change-row ' + dir + '">' + arrow + ' ' + sign + formatNumber(change) +
+      ' (' + sign + changePct.toFixed(2) + '%)</div>' +
+      '<div class="meta"><span>' + escapeHtml(updated) + '</span>' +
+      '<a href="' + yahooUrl(sym) + '" target="_blank" rel="noopener">Yahoo!で見る</a></div>';
+    bindRemoveButtons();
+  }
+
+  function fetchQuotes(chunk, apiKey){
+    var url = "https://api.twelvedata.com/quote?symbol=" +
+      encodeURIComponent(chunk.join(",")) + "&apikey=" + encodeURIComponent(apiKey);
+    return fetch(url).then(function(res){
+      return res.json();
+    }).then(function(json){
+      if(json && json.status === "error"){
+        throw new Error(json.message || "APIエラー");
+      }
+      var map = {};
+      if(json && typeof json.symbol === "string"){
+        map[json.symbol.toUpperCase()] = json;
+      }else if(json && typeof json === "object"){
+        Object.keys(json).forEach(function(k){ map[k.toUpperCase()] = json[k]; });
+      }
+      return map;
+    });
   }
 
   function fetchAll(){
+    var apiKey = apiKeyInput.value.trim();
+    if(!apiKey){
+      errorBanner.style.display = "block";
+      errorBanner.textContent = "上の欄にTwelve DataのAPIキーを入力してください(無料登録で取得できます)。";
+      return;
+    }
     if(!symbols.length){
       errorBanner.style.display = "none";
       return;
     }
     errorBanner.style.display = "none";
     var chunks = chunkArray(symbols, CHUNK_SIZE);
-    var promises = chunks.map(fetchChunk);
+    var promises = chunks.map(function(chunk){ return fetchQuotes(chunk, apiKey); });
 
     Promise.all(promises).then(function(results){
-      var rows = results.reduce(function(acc, r){ return acc.concat(r); }, []);
       var bySymbol = {};
-      rows.forEach(function(r){ bySymbol[r.symbol] = r; });
+      results.forEach(function(map){
+        Object.keys(map).forEach(function(k){ bySymbol[k] = map[k]; });
+      });
       symbols.forEach(function(sym){
-        renderCard(sym, bySymbol[sym]);
+        renderCard(sym, bySymbol[sym.toUpperCase()]);
       });
       lastUpdatedEl.textContent = "最終更新: " + new Date().toLocaleTimeString("ja-JP");
     }).catch(function(err){
       errorBanner.style.display = "block";
-      errorBanner.textContent = "データ取得に失敗しました（通信環境またはデータ提供元の制限の可能性があります）: " + err.message;
+      errorBanner.textContent = "データ取得に失敗しました: " + err.message;
     });
   }
 
@@ -561,10 +584,26 @@
     scheduleAutoRefresh();
   });
 
+  apiKeySaveBtn.addEventListener("click", function(){
+    try{ localStorage.setItem(APIKEY_KEY, apiKeyInput.value.trim()); }catch(e){}
+    fetchAll();
+  });
+
+  apiKeyInput.addEventListener("keydown", function(e){
+    if(e.key === "Enter") apiKeySaveBtn.click();
+  });
+
   (function initInterval(){
     try{
       var saved = localStorage.getItem(INTERVAL_KEY);
       if(saved !== null){ intervalSelect.value = saved; }
+    }catch(e){}
+  })();
+
+  (function initApiKey(){
+    try{
+      var saved = localStorage.getItem(APIKEY_KEY);
+      if(saved){ apiKeyInput.value = saved; }
     }catch(e){}
   })();
 
