@@ -296,10 +296,11 @@
   (例: 7203 → 7203:TSE)。米国株はティッカーをそのまま入力してください(例: AAPL)。
   他市場の銘柄は「コード:取引所コード」の形式で入力できます。
   Twelve Dataの無料プランは1分あたり8クレジット・1日800クレジットが目安の上限です
-  (銘柄1件の取得で概ね1クレジット消費)。銘柄数や更新頻度を増やすと上限に達しやすくなるため、
-  ご注意ください。設定(表示銘柄・更新間隔・APIキー)はブラウザの localStorage に保存され、
-  次回アクセス時も保持されます(APIキーはこの端末のブラウザ内にのみ保存され、Twelve Data以外の
-  外部サーバーには送信されません)。
+  (銘柄1件の取得で概ね1クレジット消費)。8銘柄を超える場合は自動的に8銘柄ずつのグループに分け、
+  1分強の間隔を空けて順番に取得します(一度に全銘柄を最新化するには銘柄数に応じて数分かかります)。
+  設定(表示銘柄・更新間隔・APIキー)はブラウザの localStorage に保存され、次回アクセス時も
+  保持されます(APIキーはこの端末のブラウザ内にのみ保存され、Twelve Data以外の外部サーバーには
+  送信されません)。
 </footer>
 
 <script>
@@ -307,14 +308,35 @@
   "use strict";
 
   var DEFAULT_SYMBOLS = [
-    "7203:TSE", // トヨタ自動車
+    "1383:TSE", // ベルグアース
+    "1420:TSE", // サンヨーホールディングス
+    "1446:TSE", // キャンディル
+    "1764:TSE", // 工藤建設
+    "1852:TSE", // 浅沼組
+    "2493:TSE", // イーサポートリンク
+    "2653:TSE", // イオン九州
+    "2698:TSE", // キャンドゥ
+    "2705:TSE", // 大戸屋ホールディングス
+    "2798:TSE", // Y's
+    "3140:TSE", // BRUNO
+    "3156:TSE", // レスターホールディングス
+    "3169:TSE", // ミサワ
+    "3177:TSE", // ありがとうサービス
+    "3246:TSE", // コーセーアールイー
+    "3297:TSE", // 東武住販
+    "3524:TSE", // 日東製網
+    "3597:TSE", // 自重堂
+    "4351:TSE", // 山田債権回収管理総合事務所
+    "5261:TSE", // リソル
+    "6178:TSE", // 日本郵政
     "6758:TSE", // ソニーグループ
-    "9984:TSE", // ソフトバンクグループ
-    "8306:TSE", // 三菱UFJフィナンシャル・グループ
-    "AAPL",     // Apple
-    "MSFT",     // Microsoft
-    "GOOGL",    // Alphabet
-    "AMZN"      // Amazon
+    "7185:TSE", // ヒロセ通商
+    "7265:TSE", // エイケン工業
+    "7562:TSE", // 安楽亭
+    "7682:TSE", // 浜木綿
+    "7875:TSE", // 竹田印刷
+    "8198:TSE", // MV東海
+    "8267:TSE"  // イオン
   ];
 
   var STORAGE_KEY = "stockDashboard.symbols.v1";
@@ -509,6 +531,13 @@
     });
   }
 
+  // 無料プランは「1分あたりのクレジット数」で制限されているため、銘柄数が
+  // CHUNK_SIZE を超える場合は全チャンクを同時発火せず、1分以上の間隔を空けて
+  // 順番に取得する。こうしないと、まとめて8銘柄以上を送った瞬間に上限を超えて
+  // 失敗してしまう。
+  var CHUNK_DELAY_MS = 65000;
+  var fetchRunId = 0;
+
   function fetchAll(){
     var apiKey = apiKeyInput.value.trim();
     if(!apiKey){
@@ -522,21 +551,36 @@
     }
     errorBanner.style.display = "none";
     var chunks = chunkArray(symbols, CHUNK_SIZE);
-    var promises = chunks.map(function(chunk){ return fetchQuotes(chunk, apiKey); });
+    var runId = ++fetchRunId;
 
-    Promise.all(promises).then(function(results){
-      var bySymbol = {};
-      results.forEach(function(map){
-        Object.keys(map).forEach(function(k){ bySymbol[k] = map[k]; });
+    function runChunk(i){
+      if(runId !== fetchRunId) return; // 別の更新が割り込んだので打ち切り
+      if(i >= chunks.length){
+        lastUpdatedEl.textContent = "最終更新: " + new Date().toLocaleTimeString("ja-JP");
+        return;
+      }
+      var chunk = chunks[i];
+      fetchQuotes(chunk, apiKey).then(function(map){
+        if(runId !== fetchRunId) return;
+        chunk.forEach(function(sym){ renderCard(sym, map[sym.toUpperCase()]); });
+        if(i + 1 < chunks.length){
+          if(chunks.length > 1){
+            lastUpdatedEl.textContent = (i + 1) + "/" + chunks.length + " グループ取得済み・残りは順次取得中…";
+          }
+          setTimeout(function(){ runChunk(i + 1); }, CHUNK_DELAY_MS);
+        }else{
+          lastUpdatedEl.textContent = "最終更新: " + new Date().toLocaleTimeString("ja-JP");
+        }
+      }).catch(function(err){
+        if(runId !== fetchRunId) return;
+        errorBanner.style.display = "block";
+        errorBanner.textContent = "データ取得に失敗しました: " + err.message;
+        if(i + 1 < chunks.length){
+          setTimeout(function(){ runChunk(i + 1); }, CHUNK_DELAY_MS);
+        }
       });
-      symbols.forEach(function(sym){
-        renderCard(sym, bySymbol[sym.toUpperCase()]);
-      });
-      lastUpdatedEl.textContent = "最終更新: " + new Date().toLocaleTimeString("ja-JP");
-    }).catch(function(err){
-      errorBanner.style.display = "block";
-      errorBanner.textContent = "データ取得に失敗しました: " + err.message;
-    });
+    }
+    runChunk(0);
   }
 
   function scheduleAutoRefresh(){
