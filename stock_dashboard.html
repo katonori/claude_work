@@ -223,6 +223,7 @@
     <a href="https://stooq.com/" target="_blank" rel="noopener">Stooq</a>
     です（Yahooファイナンスはブラウザから直接データ取得するとCORS制限で
     ブロックされるため、同種の株価データを提供する代替ソースを利用しています）。
+    直接取得できない環境では、CORS対応の公開プロキシへ自動的に切り替えます。
     各カードの「Yahoo!ファイナンスで見る」リンクから公式ページでも確認できます。
   </p>
   <div class="controls">
@@ -446,6 +447,32 @@
     return n.toFixed(2);
   }
 
+  // stooq.com が直接取得できない環境向けに、CORS対応の公開プロキシへ順に
+  // フォールバックする。直接取得できる環境ではプロキシは使われない。
+  var CORS_PROXIES = [
+    function(url){ return "https://api.allorigins.win/raw?url=" + encodeURIComponent(url); },
+    function(url){ return "https://corsproxy.io/?url=" + encodeURIComponent(url); }
+  ];
+
+  function fetchText(url){
+    return fetch(url).then(function(res){
+      if(!res.ok) throw new Error("HTTP " + res.status);
+      return res.text();
+    });
+  }
+
+  function fetchWithFallback(url, proxyIndex){
+    if(proxyIndex === undefined){
+      return fetchText(url).catch(function(){ return fetchWithFallback(url, 0); });
+    }
+    if(proxyIndex >= CORS_PROXIES.length){
+      throw new Error("直接取得・プロキシ経由のいずれも失敗しました");
+    }
+    return fetchText(CORS_PROXIES[proxyIndex](url)).catch(function(){
+      return fetchWithFallback(url, proxyIndex + 1);
+    });
+  }
+
   function fetchAll(){
     if(!symbols.length){
       errorBanner.style.display = "none";
@@ -455,10 +482,7 @@
     var chunks = chunkArray(symbols, CHUNK_SIZE);
     var promises = chunks.map(function(chunk){
       var url = "https://stooq.com/q/l/?s=" + chunk.join(",") + "&f=sd2t2ohlcvn&e=csv";
-      return fetch(url).then(function(res){
-        if(!res.ok) throw new Error("HTTP " + res.status);
-        return res.text();
-      }).then(function(text){
+      return fetchWithFallback(url).then(function(text){
         return parseCsv(text);
       });
     });
