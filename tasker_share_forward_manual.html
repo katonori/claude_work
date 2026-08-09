@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tasker 共有(送る)テキスト転送先選択タスク 作成マニュアル</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.2em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .toc {
+            background: #f8f9fa;
+            padding: 20px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .toc h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .toc-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .toc-item {
+            background: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            color: #333;
+            display: block;
+        }
+
+        .toc-item:hover {
+            background: #667eea;
+            color: white;
+            transform: translateX(5px);
+        }
+
+        section {
+            padding: 30px 40px;
+            border-bottom: 1px solid #eee;
+        }
+
+        section h2 {
+            color: #667eea;
+            font-size: 1.6em;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        section h3 {
+            color: #764ba2;
+            font-size: 1.2em;
+            margin: 20px 0 10px;
+        }
+
+        p {
+            margin-bottom: 12px;
+        }
+
+        ul, ol {
+            margin: 10px 0 15px 25px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        .step-list {
+            counter-reset: step;
+            list-style: none;
+            margin-left: 0;
+        }
+
+        .step-list > li {
+            counter-increment: step;
+            position: relative;
+            padding: 14px 14px 14px 55px;
+            margin-bottom: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #764ba2;
+        }
+
+        .step-list > li::before {
+            content: counter(step);
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #764ba2;
+            color: white;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        code, .field {
+            background: #eef0fb;
+            color: #4a3b8f;
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.92em;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+
+        th, td {
+            padding: 10px 12px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+
+        th {
+            background: #667eea;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        .box {
+            background: #f0f2fb;
+            border-left: 4px solid #667eea;
+            padding: 14px 18px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .warn {
+            background: #fff4e5;
+            border-left: 4px solid #e0a020;
+            padding: 14px 18px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .tip {
+            background: #e8f7ee;
+            border-left: 4px solid #2fa860;
+            padding: 14px 18px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        footer {
+            text-align: center;
+            padding: 25px;
+            color: #888;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Tasker「共有(送る)テキスト転送先選択」タスク作成マニュアル</h1>
+            <p>他アプリの「送る／共有」から受け取った文字列を、登録した複数のタスクの中から選んで転送する</p>
+        </header>
+
+        <nav class="toc">
+            <h2>目次</h2>
+            <div class="toc-grid">
+                <a class="toc-item" href="#overview">1. 概要</a>
+                <a class="toc-item" href="#prep">2. 事前準備</a>
+                <a class="toc-item" href="#profile">3. プロフィール作成</a>
+                <a class="toc-item" href="#task">4. タスク作成</a>
+                <a class="toc-item" href="#receive">5. 転送先タスクでの受け取り</a>
+                <a class="toc-item" href="#test">6. 動作確認</a>
+                <a class="toc-item" href="#trouble">7. トラブルシューティング</a>
+                <a class="toc-item" href="#custom">8. カスタマイズ案</a>
+            </div>
+        </nav>
+
+        <section id="overview">
+            <h2>1. 概要</h2>
+            <p>
+                Androidの共有メニュー（他アプリの「送る」「共有」ボタン）からTaskerを選ぶと、
+                共有された文字列を受け取り、<strong>あらかじめ登録しておいた転送先タスクの一覧</strong>を
+                ダイアログで表示します。ユーザーが一覧からタスクを選ぶと、共有された文字列を
+                パラメータ（<code>%par1</code>）として渡してそのタスクを実行します。
+            </p>
+            <div class="box">
+                <strong>全体の流れ</strong><br>
+                他アプリで「共有」→ Taskerを選択 → プロフィールが発火 →
+                共有テキストを取得 → 転送先タスクの選択ダイアログを表示 →
+                選ばれたタスクを、共有テキストを引数にして実行
+            </div>
+        </section>
+
+        <section id="prep">
+            <h2>2. 事前準備</h2>
+            <ul>
+                <li>Tasker アプリ（Google Play版、v5.9以降推奨。List Dialog アクションを使うため）</li>
+                <li>転送先にしたいタスクをあらかじめ作成しておく（例：「メモに追記」「翻訳する」「URLをブラウザで開く」など）</li>
+                <li>Android設定で Tasker に対して以下を許可しておく</li>
+            </ul>
+            <ul>
+                <li><span class="field">他のアプリの上に表示</span>（ダイアログ表示に必要）</li>
+                <li><span class="field">バッテリー最適化の除外</span>（バックグラウンドから起動された際にキルされないため）</li>
+            </ul>
+            <div class="warn">
+                これらの権限が無いと、共有直後にTaskerがバックグラウンドで止められ、選択ダイアログが出ないことがあります。
+            </div>
+        </section>
+
+        <section id="profile">
+            <h2>3. プロフィール作成（共有を受け取る入り口）</h2>
+            <ol class="step-list">
+                <li>Taskerで <strong>プロフィール</strong> タブ → <code>+</code> → <span class="field">イベント</span></li>
+                <li><span class="field">システム</span> → <span class="field">インテントを受信</span>（Intent Received）を選択</li>
+                <li>以下のように設定する</li>
+            </ol>
+            <table>
+                <tr><th>項目</th><th>設定値</th></tr>
+                <tr><td>Action</td><td><code>android.intent.action.SEND</code></td></tr>
+                <tr><td>Cat</td><td>空欄のままでOK（アプリによって<code>DEFAULT</code>が付かない場合があるため）</td></tr>
+                <tr><td>Mime Type</td><td><code>text/*</code></td></tr>
+            </table>
+            <p>この後、紐づけるタスクの選択画面が出るので、次の章で作る新規タスクを割り当てます。</p>
+            <div class="tip">
+                「Intent Received」で登録すると、他アプリの共有メニューに「Tasker」が候補として表示されるようになります。
+            </div>
+        </section>
+
+        <section id="task">
+            <h2>4. タスク作成（共有先選択）</h2>
+            <p>タスク名は例として <strong>「共有先選択」</strong> とします。以下のアクションを順番に追加します。</p>
+
+            <ol class="step-list">
+                <li>
+                    <strong>変数設定：共有テキストを取得</strong><br>
+                    <span class="field">タスク</span> → <span class="field">変数</span> → <span class="field">変数設定</span><br>
+                    名前: <code>%SharedText</code>　値: <code>%aextra_android_intent_extra_text</code>
+                </li>
+                <li>
+                    <strong>（任意）件名のみ共有された場合のフォールバック</strong><br>
+                    <span class="field">If</span> <code>%SharedText</code> <code>!Set</code><br>
+                    → 変数設定 <code>%SharedText</code> = <code>%aextra_android_intent_extra_subject</code><br>
+                    <span class="field">End If</span>
+                </li>
+                <li>
+                    <strong>転送先タスク一覧を定義</strong><br>
+                    変数設定 名前: <code>%FWD_TASK_LIST</code>　値: 転送先タスク名をカンマ区切りで列挙<br>
+                    例: <code>メモに追記,翻訳する,URLを開く</code><br>
+                    <span style="color:#888;">※ここに書くタスク名は、Tasker上に実在するタスク名と完全一致させること</span>
+                </li>
+                <li>
+                    <strong>カンマ区切りを配列に分割</strong><br>
+                    <span class="field">タスク</span> → <span class="field">変数</span> → <span class="field">変数分割</span>（Variable Split）<br>
+                    名前: <code>%FWD_TASK_LIST</code>　区切り文字: <code>,</code>
+                </li>
+                <li>
+                    <strong>選択ダイアログを表示</strong><br>
+                    <span class="field">タスク</span> → <span class="field">アラート</span> → <span class="field">リストダイアログ</span>（List Dialog）<br>
+                    タイトル: <code>転送先を選択</code>　項目: <code>%FWD_TASK_LIST()</code>（配列全体を渡す）<br>
+                    出力変数: <code>%SelectedTask</code>
+                </li>
+                <li>
+                    <strong>選択されたタスクを実行</strong><br>
+                    <span class="field">If</span> <code>%SelectedTask</code> <code>Set</code><br>
+                    → <span class="field">タスク</span> → <span class="field">タスク実行</span>（Perform Task）<br>
+                    　名前: <code>%SelectedTask</code>　パラメータ1: <code>%SharedText</code><br>
+                    <span class="field">End If</span>
+                </li>
+            </ol>
+
+            <div class="box">
+                <strong>ポイント</strong>：リストダイアログでキャンセルされた場合は <code>%SelectedTask</code> が未設定のままなので、
+                If で分岐させることで何も実行せず終了できます。
+            </div>
+        </section>
+
+        <section id="receive">
+            <h2>5. 転送先タスクでの受け取り方</h2>
+            <p>
+                「共有先選択」から呼び出される各転送先タスク（例：「メモに追記」）の
+                <strong>先頭アクション</strong>で、渡された文字列を受け取ります。
+            </p>
+            <div class="box">
+                変数設定 名前: <code>%ReceivedText</code>　値: <code>%par1</code>
+            </div>
+            <p>以降のアクションでは <code>%ReceivedText</code>（または直接 <code>%par1</code>）を使って処理を組み立てます。</p>
+        </section>
+
+        <section id="test">
+            <h2>6. 動作確認</h2>
+            <ol class="step-list">
+                <li>ブラウザやメモアプリなどで適当な文字列を選択・共有</li>
+                <li>共有先アプリ一覧から「Tasker」を選ぶ（確認のため「1回のみ」を選択しておくと切り替えやすい）</li>
+                <li>「転送先を選択」ダイアログが表示されることを確認</li>
+                <li>一覧からタスクを選び、そのタスクが共有テキストを受け取って正しく動作するか確認</li>
+            </ol>
+        </section>
+
+        <section id="trouble">
+            <h2>7. トラブルシューティング</h2>
+            <table>
+                <tr><th>症状</th><th>対処</th></tr>
+                <tr>
+                    <td>共有メニューにTaskerが出てこない</td>
+                    <td>プロフィールのMime Typeが <code>text/*</code> になっているか確認。プロフィールが有効（緑）になっているか確認</td>
+                </tr>
+                <tr>
+                    <td>選択ダイアログが表示されない／一瞬で消える</td>
+                    <td>「他のアプリの上に表示」権限とバッテリー最適化除外を確認</td>
+                </tr>
+                <tr>
+                    <td><code>%SharedText</code> が空になる</td>
+                    <td>共有元アプリによっては extra キー名が異なる場合があるため、変数設定の直後に
+                        フラッシュ（Flash）アクションで <code>%SharedText</code> の中身を表示して確認する</td>
+                </tr>
+                <tr>
+                    <td>Perform Taskでタスクが見つからないと言われる</td>
+                    <td><code>%FWD_TASK_LIST</code> に書いたタスク名とTasker上の実際のタスク名が
+                        一字一句一致しているか確認（全角/半角・スペースに注意）</td>
+                </tr>
+            </table>
+        </section>
+
+        <section id="custom">
+            <h2>8. カスタマイズ案</h2>
+            <ul>
+                <li><code>%FWD_TASK_LIST</code> を独立した「設定」タスクやシーンで編集できるようにし、
+                    転送先タスクを追加・削除しやすくする</li>
+                <li>選択後にトースト通知（Flash）で「〇〇に転送しました」と表示する</li>
+                <li>よく使う転送先を先頭に来るよう並び替える</li>
+                <li>特定のアプリから共有された場合だけプロフィールを発火させたい場合は、
+                    Intent Received の <span class="field">パッケージ</span>欄で送信元アプリを絞り込む</li>
+            </ul>
+        </section>
+
+        <footer>
+            Tasker 共有(送る)テキスト転送先選択タスク 作成マニュアル
+        </footer>
+    </div>
+</body>
+</html>
