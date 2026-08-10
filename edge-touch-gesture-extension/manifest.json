@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "タッチジェスチャー: L字を描いてタブを閉じる",
-  "version": "2.0.0",
-  "description": "Edge for Android で、1本指でL字（直角に近い2辺）の軌跡を描くとアクティブなタブを閉じるタッチジェスチャーを追加します。",
+  "name": "タッチジェスチャー: L字/↑→/↑←でタブ操作",
+  "version": "3.0.0",
+  "description": "Edge for Android で、1本指の軌跡ジェスチャーでタブを操作します。L字でタブを閉じる、↑→で次のタブへ、↑←で前のタブへ切り替えます。",
   "permissions": ["tabs", "storage"],
   "host_permissions": ["<all_urls>"],
   "background": {

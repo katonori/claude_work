@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         1本指でL字を描いてタブを閉じる
 // @namespace    https://github.com/katonori/claude_work
-// @version      2.0.0
-// @description  ページ上で1本指でL字（直角に近い2辺）の軌跡を描くと、現在のタブを閉じます（Edge for Android / Tampermonkey 用）
+// @version      3.0.0
+// @description  ページ上で1本指でL字（直角に近い2辺）の軌跡を描くと、現在のタブを閉じます（Edge for Android / Tampermonkey 用）。↑→・↑←によるタブ切り替えは、Tampermonkeyにタブ操作APIが無いため非対応です。
 // @author       -
 // @match        *://*/*
 // @run-at       document-idle
@@ -42,9 +42,9 @@
   let points = [];
   let startTime = 0;
 
-  function showFeedback() {
+  function showFeedback(text) {
     const el = document.createElement("div");
-    el.textContent = "タブを閉じています…";
+    el.textContent = text;
     Object.assign(el.style, {
       position: "fixed",
       top: "16px",
@@ -100,40 +100,54 @@
     return cornerIdx;
   }
 
-  // 「L字」= 直角に近い角を持つ、横方向と縦方向2辺からなる軌跡かどうかを判定する
-  function isLShapedPath(pts) {
-    if (pts.length < 4) return false;
+  // 指の軌跡を分類する:
+  // - 上に動いてから右に曲がる(↑→) -> nextTab (Tampermonkeyでは操作手段が無いため未対応)
+  // - 上に動いてから左に曲がる(↑←) -> previousTab (同上)
+  // - それ以外の直角に近いL字(L/Γ/J/⌐) -> closeTab
+  // - L字とみなせない場合は null
+  function classifyGesture(pts) {
+    if (pts.length < 4) return null;
 
     const start = pts[0];
     const end = pts[pts.length - 1];
     const cornerIdx = findCornerIndex(pts);
-    if (cornerIdx <= 0 || cornerIdx >= pts.length - 1) return false;
+    if (cornerIdx <= 0 || cornerIdx >= pts.length - 1) return null;
     const corner = pts[cornerIdx];
 
     const leg1Straight = distance(start, corner);
     const leg2Straight = distance(corner, end);
-    if (leg1Straight < MIN_LEG || leg2Straight < MIN_LEG) return false;
+    if (leg1Straight < MIN_LEG || leg2Straight < MIN_LEG) return null;
 
     const leg1Path = pathLength(pts, 0, cornerIdx);
     const leg2Path = pathLength(pts, cornerIdx, pts.length - 1);
-    if (leg1Path / leg1Straight > STRAIGHTNESS_TOLERANCE) return false;
-    if (leg2Path / leg2Straight > STRAIGHTNESS_TOLERANCE) return false;
+    if (leg1Path / leg1Straight > STRAIGHTNESS_TOLERANCE) return null;
+    if (leg2Path / leg2Straight > STRAIGHTNESS_TOLERANCE) return null;
 
-    const dx1 = Math.abs(corner.x - start.x);
-    const dy1 = Math.abs(corner.y - start.y);
-    const dx2 = Math.abs(end.x - corner.x);
-    const dy2 = Math.abs(end.y - corner.y);
+    const vx1 = corner.x - start.x;
+    const vy1 = corner.y - start.y;
+    const vx2 = end.x - corner.x;
+    const vy2 = end.y - corner.y;
+    const dx1 = Math.abs(vx1);
+    const dy1 = Math.abs(vy1);
+    const dx2 = Math.abs(vx2);
+    const dy2 = Math.abs(vy2);
 
     const leg1Horizontal = dx1 > dy1 * AXIS_ALIGN_RATIO;
     const leg1Vertical = dy1 > dx1 * AXIS_ALIGN_RATIO;
     const leg2Horizontal = dx2 > dy2 * AXIS_ALIGN_RATIO;
     const leg2Vertical = dy2 > dx2 * AXIS_ALIGN_RATIO;
 
-    if (!(leg1Horizontal || leg1Vertical)) return false;
-    if (!(leg2Horizontal || leg2Vertical)) return false;
+    if (!(leg1Horizontal || leg1Vertical)) return null;
+    if (!(leg2Horizontal || leg2Vertical)) return null;
+    const isPerpendicular = (leg1Horizontal && leg2Vertical) || (leg1Vertical && leg2Horizontal);
+    if (!isPerpendicular) return null;
 
-    // 2辺が直交(片方が横、片方が縦)していること。L / Γ / J / ⌐ いずれの向きも許容する
-    return (leg1Horizontal && leg2Vertical) || (leg1Vertical && leg2Horizontal);
+    const leg1Dir = leg1Horizontal ? (vx1 > 0 ? "right" : "left") : vy1 > 0 ? "down" : "up";
+    const leg2Dir = leg2Horizontal ? (vx2 > 0 ? "right" : "left") : vy2 > 0 ? "down" : "up";
+
+    if (leg1Dir === "up" && leg2Dir === "right") return "nextTab";
+    if (leg1Dir === "up" && leg2Dir === "left") return "previousTab";
+    return "closeTab";
   }
 
   function onTouchStart(e) {
@@ -170,14 +184,14 @@
     tracking = false;
 
     const elapsed = Date.now() - startTime;
-    if (elapsed > MAX_GESTURE_DURATION) {
-      points = [];
-      return;
-    }
-
-    if (isLShapedPath(points)) {
-      showFeedback();
-      setTimeout(() => window.close(), 200);
+    if (elapsed <= MAX_GESTURE_DURATION) {
+      const gesture = classifyGesture(points);
+      if (gesture === "closeTab") {
+        showFeedback("タブを閉じています…");
+        setTimeout(() => window.close(), 200);
+      } else if (gesture === "nextTab" || gesture === "previousTab") {
+        showFeedback("この操作はブラウザ拡張機能版でのみ対応しています");
+      }
     }
     points = [];
   }
