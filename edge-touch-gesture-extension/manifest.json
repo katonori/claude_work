@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "タッチジェスチャー: 3本指スワイプでタブを閉じる",
-  "version": "1.0.0",
-  "description": "Edge for Android で、3本指の上下スワイプによりアクティブなタブを閉じるタッチジェスチャーを追加します。",
+  "name": "タッチジェスチャー: L字を描いてタブを閉じる",
+  "version": "2.0.0",
+  "description": "Edge for Android で、1本指でL字（直角に近い2辺）の軌跡を描くとアクティブなタブを閉じるタッチジェスチャーを追加します。",
   "permissions": ["tabs", "storage"],
   "host_permissions": ["<all_urls>"],
   "background": {

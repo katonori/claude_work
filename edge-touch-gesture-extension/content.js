@@ -1,7 +1,9 @@
 (() => {
-  const REQUIRED_TOUCH_COUNT = 3;
-  const MIN_SWIPE_DISTANCE = 80; // px
-  const MAX_GESTURE_DURATION = 700; // ms
+  const MIN_LEG = 70; // px, 各辺の最低の長さ
+  const STRAIGHTNESS_TOLERANCE = 1.35; // 実際の指の軌跡長 / 直線距離 の許容比率
+  const AXIS_ALIGN_RATIO = 1.8; // 辺が横方向/縦方向とみなすための比率
+  const MAX_GESTURE_DURATION = 2000; // ms
+  const MIN_POINT_DISTANCE = 4; // px, 記録する点の間引き間隔
 
   let enabled = true;
   chrome.storage.sync.get({ enabled: true }, (result) => {
@@ -14,14 +16,8 @@
   });
 
   let tracking = false;
-  let startY = 0;
+  let points = [];
   let startTime = 0;
-
-  function averageY(touches) {
-    let sum = 0;
-    for (const t of touches) sum += t.clientY;
-    return sum / touches.length;
-  }
 
   function showFeedback() {
     const el = document.createElement("div");
@@ -43,49 +39,131 @@
     setTimeout(() => el.remove(), 800);
   }
 
+  function distance(a, b) {
+    return Math.hypot(b.x - a.x, b.y - a.y);
+  }
+
+  function perpendicularDistance(p, a, b) {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lineLenSq = dx * dx + dy * dy;
+    if (lineLenSq === 0) return distance(p, a);
+    const t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / lineLenSq;
+    const projX = a.x + t * dx;
+    const projY = a.y + t * dy;
+    return distance(p, { x: projX, y: projY });
+  }
+
+  function pathLength(pts, from, to) {
+    let len = 0;
+    for (let i = from + 1; i <= to; i++) {
+      len += distance(pts[i - 1], pts[i]);
+    }
+    return len;
+  }
+
+  function findCornerIndex(pts) {
+    const start = pts[0];
+    const end = pts[pts.length - 1];
+    let maxDist = -1;
+    let cornerIdx = -1;
+    for (let i = 1; i < pts.length - 1; i++) {
+      const d = perpendicularDistance(pts[i], start, end);
+      if (d > maxDist) {
+        maxDist = d;
+        cornerIdx = i;
+      }
+    }
+    return cornerIdx;
+  }
+
+  // 「L字」= 直角に近い角を持つ、横方向と縦方向2辺からなる軌跡かどうかを判定する
+  function isLShapedPath(pts) {
+    if (pts.length < 4) return false;
+
+    const start = pts[0];
+    const end = pts[pts.length - 1];
+    const cornerIdx = findCornerIndex(pts);
+    if (cornerIdx <= 0 || cornerIdx >= pts.length - 1) return false;
+    const corner = pts[cornerIdx];
+
+    const leg1Straight = distance(start, corner);
+    const leg2Straight = distance(corner, end);
+    if (leg1Straight < MIN_LEG || leg2Straight < MIN_LEG) return false;
+
+    const leg1Path = pathLength(pts, 0, cornerIdx);
+    const leg2Path = pathLength(pts, cornerIdx, pts.length - 1);
+    if (leg1Path / leg1Straight > STRAIGHTNESS_TOLERANCE) return false;
+    if (leg2Path / leg2Straight > STRAIGHTNESS_TOLERANCE) return false;
+
+    const dx1 = Math.abs(corner.x - start.x);
+    const dy1 = Math.abs(corner.y - start.y);
+    const dx2 = Math.abs(end.x - corner.x);
+    const dy2 = Math.abs(end.y - corner.y);
+
+    const leg1Horizontal = dx1 > dy1 * AXIS_ALIGN_RATIO;
+    const leg1Vertical = dy1 > dx1 * AXIS_ALIGN_RATIO;
+    const leg2Horizontal = dx2 > dy2 * AXIS_ALIGN_RATIO;
+    const leg2Vertical = dy2 > dx2 * AXIS_ALIGN_RATIO;
+
+    if (!(leg1Horizontal || leg1Vertical)) return false;
+    if (!(leg2Horizontal || leg2Vertical)) return false;
+
+    // 2辺が直交(片方が横、片方が縦)していること。L / Γ / J / ⌐ いずれの向きも許容する
+    return (leg1Horizontal && leg2Vertical) || (leg1Vertical && leg2Horizontal);
+  }
+
   function onTouchStart(e) {
     if (!enabled) return;
-    if (e.touches.length === REQUIRED_TOUCH_COUNT) {
-      tracking = true;
-      startY = averageY(e.touches);
-      startTime = Date.now();
-    } else {
+    if (e.touches.length !== 1) {
       tracking = false;
+      points = [];
+      return;
     }
+    tracking = true;
+    startTime = Date.now();
+    const t = e.touches[0];
+    points = [{ x: t.clientX, y: t.clientY }];
   }
 
   function onTouchMove(e) {
     if (!tracking) return;
-    if (e.touches.length !== REQUIRED_TOUCH_COUNT) {
+    if (e.touches.length !== 1) {
       tracking = false;
+      points = [];
       return;
     }
-    // 3本指ジェスチャー中はページのスクロールを抑止する
-    e.preventDefault();
+    // preventDefault は呼ばない: 通常のスクロール操作を妨げないようにする
+    const t = e.touches[0];
+    const last = points[points.length - 1];
+    const p = { x: t.clientX, y: t.clientY };
+    if (distance(last, p) >= MIN_POINT_DISTANCE) {
+      points.push(p);
+    }
   }
 
-  function onTouchEnd(e) {
+  function onTouchEnd() {
     if (!tracking) return;
     tracking = false;
 
     const elapsed = Date.now() - startTime;
-    if (elapsed > MAX_GESTURE_DURATION) return;
+    if (elapsed > MAX_GESTURE_DURATION) {
+      points = [];
+      return;
+    }
 
-    const endTouches = e.changedTouches;
-    if (!endTouches || endTouches.length === 0) return;
-    const endY = averageY(endTouches);
-    const deltaY = endY - startY;
-
-    if (Math.abs(deltaY) >= MIN_SWIPE_DISTANCE) {
+    if (isLShapedPath(points)) {
       showFeedback();
       chrome.runtime.sendMessage({ action: "closeTab" });
     }
+    points = [];
   }
 
   document.addEventListener("touchstart", onTouchStart, { passive: true });
-  document.addEventListener("touchmove", onTouchMove, { passive: false });
+  document.addEventListener("touchmove", onTouchMove, { passive: true });
   document.addEventListener("touchend", onTouchEnd, { passive: true });
   document.addEventListener("touchcancel", () => {
     tracking = false;
+    points = [];
   });
 })();
