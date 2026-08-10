@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<title>タッチジェスチャー設定</title>
+<style>
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    width: 260px;
+    padding: 16px;
+    margin: 0;
+  }
+  h1 {
+    font-size: 15px;
+    margin: 0 0 8px;
+  }
+  p {
+    font-size: 12px;
+    color: #555;
+    margin: 0 0 16px;
+    line-height: 1.5;
+  }
+  label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+  <h1>3本指スワイプでタブを閉じる</h1>
+  <p>ページ上で3本の指を素早く上下にスワイプすると、現在のタブを閉じます。</p>
+  <label>
+    <input type="checkbox" id="enabled" />
+    ジェスチャーを有効にする
+  </label>
+  <script src="popup.js"></script>
+</body>
+</html>
