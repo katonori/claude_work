@@ -1,8 +1,31 @@
-# タッチジェスチャー拡張: 3本指スワイプでタブを閉じる
+# タッチジェスチャー: 3本指スワイプでタブを閉じる
 
-Edge for Android 用の Manifest V3 拡張機能です。ページ上で **3本の指を素早く上下にスワイプ** すると、アクティブなタブを閉じます。ポップアップから ON/OFF を切り替えられます。
+ページ上で **3本の指を素早く上下にスワイプ** すると、アクティブなタブを閉じるジェスチャーです。
 
-## 仕組み
+## ⚠️ Edge for Android へのインストールについて（重要）
+
+調べた結果、Edge for Android の**安定版**（例: バージョン 150.x）には、独自の拡張機能をサイドロードする仕組み自体がありません。安定版にあるのは Microsoft が審査・承認した一部の拡張機能だけを選べる「拡張機能ストア」のみです。ローカルフォルダの読み込みは **Edge Canary** にしかなく、しかもそれは「Microsoft Edge Add-ons ストアに公開済みの拡張機能を ID 指定でインストールする」方式で、デスクトップのような「フォルダを直接読み込む」機能はありません。
+
+そのため、このリポジトリには2つの実装を用意しています。
+
+| 方式 | ファイル | 安定版Edgeで今すぐ使えるか |
+|---|---|---|
+| **Tampermonkeyユーザースクリプト（推奨）** | `tab-close-gesture.user.js` | ○ Tampermonkey自体が拡張機能ストアの承認済みアプリなので、安定版でも今すぐ使えます |
+| Chromium拡張機能（Manifest V3） | `manifest.json` ほか | △ 現状Edge Canaryでの公開拡張機能ID経由、またはデスクトップ版Edge/Chromeでのみ利用可 |
+
+## Tampermonkeyユーザースクリプトのインストール手順（推奨）
+
+1. Edge for Android の「拡張機能」ストアから **Tampermonkey** をインストールする（メニュー → 拡張機能 → 追加できる拡張機能一覧から選択）。
+2. Tampermonkey を開き、「ユーザースクリプトを作成」または「ダッシュボード」→「ユーティリティ」→「インポート」などから `tab-close-gesture.user.js` の中身を貼り付けて保存する。
+   - GitHub上のraw URLを開くと、Tampermonkeyが自動的にインストール画面を表示することもあります。
+3. 保存後、対象のWebページ上で3本指を素早く上下にスワイプすると、タブが閉じます。
+4. ON/OFFはTampermonkeyのメニュー（ブラウザメニュー内のTampermonkeyアイコン、または拡張機能アイコンをタップ）から「ジェスチャーを無効にする/有効にする」で切り替えられます。
+
+## Chromium拡張機能（Manifest V3）版について
+
+こちらは通常の `chrome.tabs` APIを使った実装で、デスクトップ版Edge/Chromeでの動作確認や、将来的にEdge Add-onsストアへ公開する場合のベースとして残しています。現時点のEdge for Android安定版では利用できません。
+
+## 仕組み（Chromium拡張機能版）
 
 - `content.js`: 各ページに挿入され、`touchstart`/`touchmove`/`touchend` を監視。3本指のタッチが開始され、700ms以内に80px以上上下に動いたらジェスチャーとして認識し、`background.js` にメッセージを送る。
 - `background.js`: メッセージを受け取り `chrome.tabs.remove()` でタブを閉じる（`tabs` 権限が必要なため content script からは直接呼べない）。
