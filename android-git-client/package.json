@@ -1,0 +1,27 @@
+{
+  "name": "android-git-client",
+  "version": "1.0.0",
+  "description": "A standalone, installable web-based git client for Android (and any browser), built with isomorphic-git. Runs entirely client-side, no backend required.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "git",
+    "isomorphic-git",
+    "pwa",
+    "android"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@isomorphic-git/lightning-fs": "^4.7.0",
+    "buffer": "^6.0.3",
+    "isomorphic-git": "^1.41.3"
+  },
+  "devDependencies": {
+    "vite": "^8.2.1"
+  }
+}
