@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <rect x="0" y="0" width="108" height="108" fill="#1565C0" />
+
+  <!-- back page (peeking out top-right), representing multiple source pages -->
+  <path d="M40,20 h32 l10,10 v40 h-42 z" fill="#90CAF9" />
+  <path d="M72,20 l10,10 h-10 z" fill="#BBDEFB" />
+
+  <!-- front page, representing the single consolidated output -->
+  <path d="M26,32 h32 l10,10 v44 h-42 z" fill="#FFFFFF" />
+  <path d="M58,32 l10,10 h-10 z" fill="#E3F2FD" />
+
+  <!-- 2x2 grid marks on the front page, symbolizing pages consolidated into one -->
+  <path d="M33,50 h13 v11 h-13 z" fill="#1565C0" />
+  <path d="M50,50 h13 v11 h-13 z" fill="#1565C0" />
+  <path d="M33,65 h13 v11 h-13 z" fill="#1565C0" />
+  <path d="M50,65 h13 v11 h-13 z" fill="#1565C0" />
+</svg>

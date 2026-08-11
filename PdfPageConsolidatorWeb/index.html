@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>PDFページ集約ツール</title>
+  <meta name="description" content="複数ページのPDFを1枚に集約(N-up割り付け)するツール。ブラウザ内で処理するためファイルはサーバーに送信されません。" />
+  <meta name="theme-color" content="#1565c0" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-32.png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>PDFページ集約ツール</h1>
+    <p class="subtitle">複数ページのPDFを1枚に集約(割り付け)します。処理はすべて端末内(ブラウザ)で行われ、ファイルは外部に送信されません。</p>
+  </header>
+
+  <main>
+    <section class="card section">
+      <label class="file-input-label" for="fileInput">PDFファイルを選択</label>
+      <input type="file" id="fileInput" accept="application/pdf,.pdf" />
+      <p class="file-info" id="fileInfo">ファイルが選択されていません</p>
+    </section>
+
+    <section class="card">
+      <div class="section">
+        <label class="field-label" for="gridSelect">割り付けレイアウト</label>
+        <select id="gridSelect"></select>
+      </div>
+
+      <div class="section">
+        <label class="field-label" for="pageSizeSelect">出力ページサイズ</label>
+        <select id="pageSizeSelect"></select>
+      </div>
+
+      <div class="section">
+        <span class="field-label">出力の向き</span>
+        <div class="orientation-toggle">
+          <label>
+            <input type="radio" name="orientation" value="portrait" checked />
+            縦向き
+          </label>
+          <label>
+            <input type="radio" name="orientation" value="landscape" />
+            横向き
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <button id="consolidateButton" class="btn-primary" disabled>変換する</button>
+      <progress id="progressBar" value="0" max="1"></progress>
+      <p id="statusText"></p>
+      <div id="downloadArea">
+        <a id="downloadLink" href="#" download="consolidated.pdf">変換したPDFをダウンロード</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    すべての処理は端末内で完結します(サーバーへのアップロードなし)。
+  </footer>
+
+  <script src="vendor/pdf-lib.min.js"></script>
+  <script src="pdfConsolidateCore.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
