@@ -1,0 +1,40 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:pathData="M0,0h108v108h-108z"
+        android:fillColor="#1565C0" />
+
+    <!-- back page (peeking out top-right), representing multiple source pages -->
+    <path
+        android:pathData="M40,20 h32 l10,10 v40 h-42 z"
+        android:fillColor="#90CAF9" />
+    <path
+        android:pathData="M72,20 l10,10 h-10 z"
+        android:fillColor="#BBDEFB" />
+
+    <!-- front page, representing the single consolidated output -->
+    <path
+        android:pathData="M26,32 h32 l10,10 v44 h-42 z"
+        android:fillColor="#FFFFFF" />
+    <path
+        android:pathData="M58,32 l10,10 h-10 z"
+        android:fillColor="#E3F2FD" />
+
+    <!-- 2x2 grid marks on the front page, symbolizing pages consolidated into one -->
+    <path
+        android:pathData="M33,50 h13 v11 h-13 z"
+        android:fillColor="#1565C0" />
+    <path
+        android:pathData="M50,50 h13 v11 h-13 z"
+        android:fillColor="#1565C0" />
+    <path
+        android:pathData="M33,65 h13 v11 h-13 z"
+        android:fillColor="#1565C0" />
+    <path
+        android:pathData="M50,65 h13 v11 h-13 z"
+        android:fillColor="#1565C0" />
+</vector>

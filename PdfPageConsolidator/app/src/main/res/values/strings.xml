@@ -1,0 +1,30 @@
+<resources>
+    <string name="app_name">PDFページ集約</string>
+
+    <string name="title">PDFページ集約ツール</string>
+    <string name="subtitle">複数ページのPDFを1枚に集約(割り付け)します</string>
+
+    <string name="select_file_button">PDFファイルを選択</string>
+    <string name="no_file_selected">ファイルが選択されていません</string>
+
+    <string name="layout_label">割り付けレイアウト</string>
+    <string name="page_size_label">出力ページサイズ</string>
+    <string name="orientation_label">出力の向き</string>
+    <string name="orientation_portrait">縦向き</string>
+    <string name="orientation_landscape">横向き</string>
+
+    <string name="consolidate_button">変換して保存</string>
+
+    <string name="error_select_file_first">先にPDFファイルを選択してください</string>
+    <string name="error_open_input">PDFファイルを開けませんでした</string>
+    <string name="error_open_output">保存先を開けませんでした</string>
+    <string name="error_no_pages">このPDFにはページがありません</string>
+    <string name="error_layout_too_large">選択したレイアウトがページサイズに対して大きすぎます</string>
+    <string name="error_password_protected">パスワード保護されたPDFは処理できません</string>
+
+    <string name="status_processing">処理中… (%1$d / %2$d ページ)</string>
+    <string name="status_done">完了しました(出力 %1$d ページ)</string>
+    <string name="status_failed">エラー: %1$s</string>
+    <string name="toast_done">PDFの集約が完了しました</string>
+    <string name="toast_failed">変換に失敗しました: %1$s</string>
+</resources>
