@@ -1,22 +1,18 @@
-import git from 'isomorphic-git';
-import http from 'isomorphic-git/http/web';
-import { fs, pfs, repoDir, ensureReposRoot, listFilesRecursive, rmrf } from './fs.js';
+import { registerPlugin } from '@capacitor/core';
 
-// isomorphic-git runs entirely in the browser/webview here — there is no
-// server component. Browsers refuse cross-origin git-smart-http requests
-// unless the remote sends CORS headers (most git hosts, incl. GitHub,
-// don't), so a CORS-unwrapping proxy is required for clone/fetch/push
-// against real remotes. Defaults to the public isomorphic-git demo proxy;
-// users can point this at their own (see README) for reliability/privacy.
-const DEFAULT_CORS_PROXY = 'https://cors.isomorphic-git.org';
+// Native git backend (JGit, running in the Android process) — see
+// android/app/src/main/java/com/gitclient/app/GitNativePlugin.java. Every
+// repo is a real directory under the public Documents/GitClient/repos/<name>
+// folder, so other apps (Files, editors) can see it directly.
+const GitNative = registerPlugin('GitNative');
 
-export function getCorsProxy() {
-  return localStorage.getItem('git-client:corsProxy') || DEFAULT_CORS_PROXY;
+export async function checkStorageAccess() {
+  const { granted } = await GitNative.checkStorageAccess();
+  return granted;
 }
 
-export function setCorsProxy(value) {
-  if (value) localStorage.setItem('git-client:corsProxy', value);
-  else localStorage.removeItem('git-client:corsProxy');
+export async function requestStorageAccess() {
+  await GitNative.requestStorageAccess();
 }
 
 export function getIdentity() {
@@ -51,129 +47,81 @@ export function clearCredentials(name) {
   localStorage.removeItem(credKey(name));
 }
 
-function onAuthFor(creds) {
-  if (!creds || !creds.username) return undefined;
-  return () => ({ username: creds.username, password: creds.password });
+function identityFields() {
+  const { name, email } = getIdentity();
+  return { authorName: name, authorEmail: email };
+}
+
+export const REPOS_ROOT = '/repos';
+
+export function repoDir(name) {
+  return `${REPOS_ROOT}/${name}`;
+}
+
+// `dir` is always `/repos/<name>` (see repoDir above) — this strips that
+// convention back down to the bare repo name the native plugin expects.
+function nameFromDir(dir) {
+  return dir.startsWith(`${REPOS_ROOT}/`) ? dir.slice(REPOS_ROOT.length + 1) : dir;
+}
+
+export async function listRepos() {
+  const { names } = await GitNative.listRepos();
+  return names;
+}
+
+export async function repoExists(name) {
+  const { exists } = await GitNative.repoExists({ name });
+  return exists;
+}
+
+export async function removeRepo(name) {
+  await GitNative.removeRepo({ name });
 }
 
 export async function initRepo(name, { defaultBranch = 'main' } = {}) {
-  await ensureReposRoot();
-  const dir = repoDir(name);
-  await pfs.mkdir(dir);
-  await git.init({ fs, dir, defaultBranch });
-  await applyIdentity(dir);
+  await GitNative.initRepo({ name, defaultBranch, ...identityFields() });
 }
 
-export async function cloneRepo(name, url, { creds, corsProxy, depth, ref } = {}) {
-  await ensureReposRoot();
-  const dir = repoDir(name);
-  await pfs.mkdir(dir);
-  try {
-    await git.clone({
-      fs,
-      http,
-      dir,
-      url,
-      corsProxy: corsProxy ?? getCorsProxy(),
-      depth: depth ?? 50,
-      singleBranch: false,
-      ref: ref || undefined,
-      onAuth: onAuthFor(creds),
-    });
-  } catch (err) {
-    // Clean up the partial directory so a failed clone doesn't leave a
-    // broken "repo" behind in the sidebar.
-    await rmrf(dir).catch(() => {});
-    throw err;
-  }
-  await applyIdentity(dir);
-}
-
-async function applyIdentity(dir) {
-  const { name, email } = getIdentity();
-  if (name) await git.setConfig({ fs, dir, path: 'user.name', value: name });
-  if (email) await git.setConfig({ fs, dir, path: 'user.email', value: email });
+export async function cloneRepo(name, url, { creds, depth, ref } = {}) {
+  await GitNative.cloneRepo({
+    name,
+    url,
+    depth: depth ?? 50,
+    ref: ref || undefined,
+    username: creds?.username,
+    password: creds?.password,
+    ...identityFields(),
+  });
 }
 
 export async function getRemoteUrl(dir, remote = 'origin') {
-  try {
-    const remotes = await git.listRemotes({ fs, dir });
-    const found = remotes.find((r) => r.remote === remote);
-    return found ? found.url : '';
-  } catch {
-    return '';
-  }
+  const { url } = await GitNative.getRemoteUrl({ name: nameFromDir(dir), remote });
+  return url;
 }
 
 export async function setRemoteUrl(dir, url, remote = 'origin') {
-  const remotes = await git.listRemotes({ fs, dir });
-  if (remotes.find((r) => r.remote === remote)) {
-    await git.deleteRemote({ fs, dir, remote });
-  }
-  await git.addRemote({ fs, dir, remote, url });
+  await GitNative.setRemoteUrl({ name: nameFromDir(dir), url, remote });
 }
 
-// See https://isomorphic-git.org/docs/en/statusMatrix — HEAD/WORKDIR/STAGE
-// are each 0-3 codes, not booleans, so "staged" and "has further unstaged
-// changes" have to be derived rather than read off directly.
-function isStaged(head, stage) {
-  return head === 1 ? stage !== 1 : stage !== 0;
-}
-
-function hasUnstagedChange(workdir, stage) {
-  if (stage === 0) return workdir === 2;
-  if (stage === 1) return workdir !== 1;
-  if (stage === 2) return false;
-  return true; // stage === 3
-}
-
-function describe(head, workdir, stage) {
-  if (head === 0 && stage === 0) return 'untracked';
-  if (workdir === 0) return isStaged(head, stage) ? 'deleted (staged)' : 'deleted';
-  if (head === 0) return isStaged(head, stage) ? 'added (staged)' : 'added';
-  return isStaged(head, stage) ? 'modified (staged)' : 'modified';
-}
-
-// Wraps git.statusMatrix into a friendlier shape for the UI.
 export async function getStatus(dir) {
-  const matrix = await git.statusMatrix({ fs, dir });
-  return matrix
-    .filter(([, head, workdir, stage]) => !(head === 1 && workdir === 1 && stage === 1))
-    .map(([filepath, head, workdir, stage]) => ({
-      filepath,
-      head,
-      workdir,
-      stage,
-      label: describe(head, workdir, stage),
-      staged: isStaged(head, stage),
-      hasUnstagedChange: hasUnstagedChange(workdir, stage),
-    }));
+  const { entries } = await GitNative.getStatus({ name: nameFromDir(dir) });
+  return entries;
 }
 
 export async function stageFile(dir, filepath) {
-  await git.add({ fs, dir, filepath });
+  await GitNative.stageFile({ name: nameFromDir(dir), filepath });
 }
 
 export async function unstageFile(dir, filepath) {
-  await git.resetIndex({ fs, dir, filepath });
+  await GitNative.unstageFile({ name: nameFromDir(dir), filepath });
 }
 
 export async function stageAll(dir) {
-  const status = await getStatus(dir);
-  for (const entry of status) {
-    if (entry.workdir === 0) {
-      await git.remove({ fs, dir, filepath: entry.filepath });
-    } else {
-      await git.add({ fs, dir, filepath: entry.filepath });
-    }
-  }
+  await GitNative.stageAll({ name: nameFromDir(dir) });
 }
 
 export async function unstageAll(dir) {
-  const status = await getStatus(dir);
-  for (const entry of status) {
-    await git.resetIndex({ fs, dir, filepath: entry.filepath });
-  }
+  await GitNative.unstageAll({ name: nameFromDir(dir) });
 }
 
 export async function commit(dir, message) {
@@ -181,99 +129,81 @@ export async function commit(dir, message) {
   if (!name || !email) {
     throw new Error('Set your name and email in Settings before committing.');
   }
-  return git.commit({ fs, dir, message, author: { name, email } });
+  await GitNative.commit({ name: nameFromDir(dir), message, ...identityFields() });
 }
 
 export async function getLog(dir, { depth = 50, ref } = {}) {
-  try {
-    return await git.log({ fs, dir, depth, ref });
-  } catch {
-    return [];
-  }
+  const { entries } = await GitNative.getLog({ name: nameFromDir(dir), depth, ref });
+  return entries.map((e) => ({
+    oid: e.oid,
+    commit: {
+      message: e.message,
+      author: { name: e.authorName, timestamp: e.authorTimestamp },
+    },
+  }));
 }
 
 export async function currentBranch(dir) {
-  return (await git.currentBranch({ fs, dir, fullname: false })) || null;
+  const { branch } = await GitNative.currentBranch({ name: nameFromDir(dir) });
+  return branch || null;
 }
 
 export async function listBranches(dir) {
-  return git.listBranches({ fs, dir });
+  const { branches } = await GitNative.listBranches({ name: nameFromDir(dir) });
+  return branches;
 }
 
 export async function listRemoteBranches(dir, remote = 'origin') {
-  try {
-    return await git.listBranches({ fs, dir, remote });
-  } catch {
-    return [];
-  }
+  const { branches } = await GitNative.listRemoteBranches({ name: nameFromDir(dir), remote });
+  return branches;
 }
 
 export async function createBranch(dir, name, { checkout = true } = {}) {
-  await git.branch({ fs, dir, ref: name, checkout });
+  await GitNative.createBranch({ name: nameFromDir(dir), branch: name, checkout });
 }
 
 export async function checkoutBranch(dir, ref) {
-  await git.checkout({ fs, dir, ref });
+  await GitNative.checkoutBranch({ name: nameFromDir(dir), ref });
 }
 
-export async function fetchRepo(dir, { creds, corsProxy } = {}) {
-  return git.fetch({
-    fs,
-    http,
-    dir,
-    corsProxy: corsProxy ?? getCorsProxy(),
-    onAuth: onAuthFor(creds),
+export async function fetchRepo(dir, { creds } = {}) {
+  await GitNative.fetchRepo({ name: nameFromDir(dir), username: creds?.username, password: creds?.password });
+}
+
+export async function pullRepo(dir, { creds } = {}) {
+  await GitNative.pullRepo({
+    name: nameFromDir(dir),
+    username: creds?.username,
+    password: creds?.password,
+    ...identityFields(),
   });
 }
 
-export async function pullRepo(dir, { creds, corsProxy, ref } = {}) {
-  const { name, email } = getIdentity();
-  return git.pull({
-    fs,
-    http,
-    dir,
-    ref,
-    corsProxy: corsProxy ?? getCorsProxy(),
-    onAuth: onAuthFor(creds),
-    author: name && email ? { name, email } : undefined,
-  });
-}
-
-export async function pushRepo(dir, { creds, corsProxy, ref, remoteRef, force = false } = {}) {
-  return git.push({
-    fs,
-    http,
-    dir,
+export async function pushRepo(dir, { creds, ref, remoteRef, force = false } = {}) {
+  await GitNative.pushRepo({
+    name: nameFromDir(dir),
+    username: creds?.username,
+    password: creds?.password,
     ref,
     remoteRef,
     force,
-    corsProxy: corsProxy ?? getCorsProxy(),
-    onAuth: onAuthFor(creds),
   });
 }
 
 export async function readFile(dir, filepath) {
-  return pfs.readFile(`${dir}/${filepath}`, { encoding: 'utf8' });
+  const { content } = await GitNative.readFile({ name: nameFromDir(dir), filepath });
+  return content;
 }
 
 export async function writeFile(dir, filepath, content) {
-  const parts = filepath.split('/');
-  let current = dir;
-  for (let i = 0; i < parts.length - 1; i++) {
-    current += `/${parts[i]}`;
-    try {
-      await pfs.mkdir(current);
-    } catch (err) {
-      if (err.code !== 'EEXIST') throw err;
-    }
-  }
-  await pfs.writeFile(`${dir}/${filepath}`, content, 'utf8');
+  await GitNative.writeFile({ name: nameFromDir(dir), filepath, content });
 }
 
 export async function deleteFile(dir, filepath) {
-  await pfs.unlink(`${dir}/${filepath}`);
+  await GitNative.deleteFile({ name: nameFromDir(dir), filepath });
 }
 
 export async function listWorkingFiles(dir) {
-  return listFilesRecursive(dir);
+  const { files } = await GitNative.listWorkingFiles({ name: nameFromDir(dir) });
+  return files;
 }

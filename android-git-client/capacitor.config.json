@@ -1,0 +1,5 @@
+{
+  "appId": "com.gitclient.app",
+  "appName": "Git Client",
+  "webDir": "dist"
+}

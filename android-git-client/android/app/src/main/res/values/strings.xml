@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Git Client</string>
+    <string name="title_activity_main">Git Client</string>
+    <string name="package_name">com.gitclient.app</string>
+    <string name="custom_url_scheme">com.gitclient.app</string>
+</resources>

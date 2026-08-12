@@ -339,6 +339,16 @@ textarea.commit-msg {
   color: var(--accent);
 }
 
+.branch-select {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 10px;
+}
+
 .branch-item {
   display: flex;
   align-items: center;

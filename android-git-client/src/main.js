@@ -1,8 +1,6 @@
 import './style.css';
-import { Buffer } from 'buffer';
-window.Buffer = window.Buffer || Buffer;
 
-import { listRepos, repoDir, repoExists, removeRepo } from './fs.js';
+import { listRepos, repoDir, repoExists, removeRepo } from './git.js';
 import * as Git from './git.js';
 
 const app = document.getElementById('app');
@@ -16,6 +14,7 @@ const state = {
   status: [],
   branch: null,
   branches: [],
+  remoteBranches: [],
   log: [],
   files: [],
   editingFile: null,
@@ -113,16 +112,18 @@ async function openRepo(name) {
 
 async function refreshRepoData() {
   const dir = currentDir();
-  const [status, branch, branches, log, files] = await Promise.all([
+  const [status, branch, branches, remoteBranches, log, files] = await Promise.all([
     Git.getStatus(dir).catch(() => []),
     Git.currentBranch(dir).catch(() => null),
     Git.listBranches(dir).catch(() => []),
+    Git.listRemoteBranches(dir).catch(() => []),
     Git.getLog(dir, { depth: 50 }).catch(() => []),
     Git.listWorkingFiles(dir).catch(() => []),
   ]);
   state.status = status;
   state.branch = branch;
   state.branches = branches;
+  state.remoteBranches = remoteBranches;
   state.log = log;
   state.files = files.sort();
 }
@@ -150,7 +151,8 @@ const PRESERVED_INPUTS = [
 ];
 
 function render() {
-  app.innerHTML = state.view === 'home' ? renderHome() : renderRepoView();
+  app.innerHTML =
+    state.view === 'permission' ? renderPermissionGate() : state.view === 'home' ? renderHome() : renderRepoView();
   if (state.modal) app.insertAdjacentHTML('beforeend', renderModal());
   if (state.busy) app.insertAdjacentHTML('beforeend', renderBusy());
   if (state.toast) app.insertAdjacentHTML('beforeend', renderToast());
@@ -169,6 +171,20 @@ function renderBusy() {
   return `<div class="toast"><span class="spinner"></span>${esc(state.busyLabel || 'Working…')}</div>`;
 }
 
+function renderPermissionGate() {
+  return `
+    <main style="display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:100vh;padding:24px;text-align:center;gap:16px;">
+      <h1>Git Client</h1>
+      <p style="color:var(--text-dim);max-width:320px;">
+        リポジトリを端末の Documents フォルダに保存し、他のアプリからも見えるようにするには、
+        「すべてのファイルへのアクセス」を許可してください。
+      </p>
+      <button class="btn" data-action="request-storage-access">アクセスを許可</button>
+      <button class="small-btn" data-action="recheck-storage-access">許可したので確認する</button>
+    </main>
+  `;
+}
+
 function renderHome() {
   const list = state.repos.length
     ? `<ul class="repo-list">${state.repos
@@ -183,7 +199,7 @@ function renderHome() {
         </li>`
         )
         .join('')}</ul>`
-    : `<div class="empty-state">まだリポジトリがありません。<br/>「Clone」で既存リポジトリを取得するか、「New」でローカルリポジトリを作成してください。<br/><br/>すべてこのブラウザ内(IndexedDB)に保存され、サーバーには送信されません。</div>`;
+    : `<div class="empty-state">まだリポジトリがありません。<br/>「Clone」で既存リポジトリを取得するか、「New」でローカルリポジトリを作成してください。<br/><br/>すべて端末の Documents/GitClient フォルダに保存され、サーバーには送信されません。</div>`;
 
   return `
     <header class="topbar">
@@ -299,7 +315,7 @@ function renderHistory() {
 }
 
 function renderBranches() {
-  const items = state.branches
+  const localItems = state.branches
     .map(
       (b) => `
       <div class="branch-item">
@@ -312,11 +328,34 @@ function renderBranches() {
       </div>`
     )
     .join('');
+
+  const remoteItems = state.remoteBranches
+    .map((b) => `<div class="branch-item"><span>origin/${esc(b)}</span></div>`)
+    .join('');
+
+  const options = [
+    ...state.branches.map(
+      (b) => `<option value="${esc(b)}" ${b === state.branch ? 'selected' : ''}>${esc(b)}</option>`
+    ),
+    ...state.remoteBranches.map((b) => `<option value="origin/${esc(b)}">origin/${esc(b)}</option>`),
+  ].join('');
+
   return `
+    <div class="section-title">Checkout</div>
+    <div class="btn-row" style="margin-bottom:18px;">
+      <select id="branch-select" class="branch-select">${options}</select>
+      <button class="small-btn" data-action="checkout-selected-branch">Checkout</button>
+    </div>
+
     <div class="btn-row" style="margin-bottom:14px;">
       <button class="btn secondary" data-action="open-new-branch">＋ 新規ブランチ</button>
     </div>
-    ${items || '<div class="empty-state">ブランチがありません。</div>'}
+
+    <div class="section-title">ローカルブランチ</div>
+    ${localItems || '<div class="empty-state">ブランチがありません。</div>'}
+
+    <div class="section-title">リモートブランチ (origin)</div>
+    ${remoteItems || '<div class="empty-state">リモートブランチがありません。Fetchすると表示されます。</div>'}
   `;
 }
 
@@ -367,15 +406,6 @@ function renderRemote() {
       <input type="checkbox" id="cred-remember" ${Git.getSavedCredentials(state.currentRepo) ? 'checked' : ''}/>
       この端末に保存する (localStorage)
     </label>
-
-    <div class="section-title">CORS プロキシ</div>
-    <div class="field">
-      <input id="cors-proxy" type="text" value="${esc(Git.getCorsProxy())}" />
-    </div>
-    <p style="color:var(--text-dim);font-size:12px;line-height:1.5;">
-      ブラウザからGitホストへ直接通信するにはCORSを許可するプロキシが必要です。既定値は公開デモプロキシです。
-      本番利用では自前のcors-proxyをホストして設定してください。
-    </p>
 
     <div class="section-title">操作</div>
     <div class="btn-row">
@@ -467,6 +497,12 @@ async function onAction(e) {
 
   try {
     switch (action) {
+      case 'request-storage-access':
+        await Git.requestStorageAccess();
+        break;
+      case 'recheck-storage-access':
+        await enterAppIfReady();
+        break;
       case 'open-clone':
         openModal('clone');
         break;
@@ -561,6 +597,15 @@ async function onAction(e) {
           await refreshRepoData();
         });
         break;
+      case 'checkout-selected-branch': {
+        const branch = document.getElementById('branch-select')?.value;
+        if (!branch) break;
+        await withBusy('切り替え中…', async () => {
+          await Git.checkoutBranch(currentDir(), branch);
+          await refreshRepoData();
+        });
+        break;
+      }
       case 'open-new-branch':
         openModal('new-branch');
         break;
@@ -651,8 +696,6 @@ function collectCreds() {
   const username = document.getElementById('cred-username')?.value.trim();
   const password = document.getElementById('cred-password')?.value;
   const remember = document.getElementById('cred-remember')?.checked;
-  const corsProxyInput = document.getElementById('cors-proxy')?.value.trim();
-  if (corsProxyInput) Git.setCorsProxy(corsProxyInput);
   if (remember && username) {
     Git.saveCredentials(state.currentRepo, { username, password });
   } else if (!remember) {
@@ -720,13 +763,25 @@ async function handleInit() {
 
 // ---------- boot ----------
 
-async function boot() {
-  await refreshRepoList();
-  render();
-
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch((err) => console.warn('SW registration failed', err));
+async function enterAppIfReady() {
+  if (await Git.checkStorageAccess()) {
+    state.view = 'home';
+    await refreshRepoList();
+  } else {
+    state.view = 'permission';
   }
+  render();
+}
+
+async function boot() {
+  await enterAppIfReady();
+  // Re-check automatically when returning from the Android storage-access
+  // settings screen, so the user doesn't have to tap "確認" manually.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && state.view === 'permission') {
+      enterAppIfReady();
+    }
+  });
 }
 
 boot();
