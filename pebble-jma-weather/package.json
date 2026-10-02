@@ -1,0 +1,60 @@
+{
+  "name": "jma-weather",
+  "author": "katonori",
+  "version": "1.0.0",
+  "keywords": ["pebble-app"],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "気象庁天気",
+    "uuid": "709e72f7-7be9-4213-aac2-e1f30b500d99",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": [
+      "basalt",
+      "chalk",
+      "diorite",
+      "emery",
+      "flint",
+      "gabbro"
+    ],
+    "capabilities": [
+      "configurable",
+      "location"
+    ],
+    "watchapp": {
+      "watchface": false
+    },
+    "messageKeys": [
+      "REFRESH",
+      "AREA",
+      "REPORT",
+      "ERROR",
+      "DAY_COUNT",
+      "DAY_LABEL[3]",
+      "DAY_TEXT[3]",
+      "DAY_ICON[3]",
+      "DAY_TMAX[3]",
+      "DAY_TMIN[3]",
+      "DAY_POP[3]",
+      "DAY_WIND[3]",
+      "WEEK_COUNT",
+      "WEEK_DATE[7]",
+      "WEEK_ICON[7]",
+      "WEEK_TELOP[7]",
+      "WEEK_POP[7]",
+      "WEEK_TEMP[7]",
+      "OVERVIEW"
+    ],
+    "resources": {
+      "media": [
+        {
+          "type": "font",
+          "name": "FONT_JP_16",
+          "file": "fonts/DotGothic16-jma.ttf",
+          "extended": true
+        }
+      ]
+    }
+  }
+}
