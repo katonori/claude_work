@@ -19,4 +19,5 @@ pebble build
 ビルド済みの `carbon-time-axis.pbw` をそのままインストールすることもできます。
 
 ## スクリーンショット
+- 時刻表示を大きく(basalt/diorite/flint/aplite: LECO_36_BOLD → LECO_42)。左右のタイムゾーン/AM-PM表示は時刻行から都市名の行の左右端へ移動
 `screenshots/` に変更前(before_basalt)と変更後(basalt / basalt 12h / diorite / emery)を同梱。
