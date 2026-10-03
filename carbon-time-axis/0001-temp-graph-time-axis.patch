@@ -1,7 +1,7 @@
 From f37da31985bfa5d5f5043a6eea3660a2ced0e0fb Mon Sep 17 00:00:00 2001
 From: katonori <norito.kato@gmail.com>
 Date: Sat, 3 Oct 2026 00:42:57 +0000
-Subject: [PATCH] Add time axis below temperature graph
+Subject: [PATCH 1/2] Add time axis below temperature graph
 
 ---
  src/c/ui/temp_layer.c | 77 ++++++++++++++++++++++++++++++++++++++++---
@@ -118,6 +118,53 @@ index 64db279..db06930 100644
  		}
  	}
  }
+-- 
+2.43.0
+
+
+From acedbf8d8fa21bb289eebb29a066c48cff224e45 Mon Sep 17 00:00:00 2001
+From: katonori <norito.kato@gmail.com>
+Date: Sat, 3 Oct 2026 00:47:35 +0000
+Subject: [PATCH 2/2] Use abbreviated weekday in date display
+
+---
+ src/c/modules/settings.c | 2 +-
+ src/pkjs/config.js       | 8 ++++----
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/src/c/modules/settings.c b/src/c/modules/settings.c
+index f180292..69baa9d 100644
+--- a/src/c/modules/settings.c
++++ b/src/c/modules/settings.c
+@@ -17,7 +17,7 @@ static Settings s_settings;
+ // struct to maintain compatibility with old persisted data.
+ static const Settings s_defaults = {
+     .temp_unit_celsius = true,
+-    .date_format = "%A, %m/%d",
++    .date_format = "%a, %m/%d",
+     .accent_color = {.argb = 0b11111111}, // GColorWhite
+     .battery_display = BATTERY_DISPLAY_ICON,
+     .show_timezone = true,
+diff --git a/src/pkjs/config.js b/src/pkjs/config.js
+index aeec485..081ba25 100644
+--- a/src/pkjs/config.js
++++ b/src/pkjs/config.js
+@@ -65,11 +65,11 @@ module.exports = [
+ 				'type': 'select',
+ 				'messageKey': 'SETTING_DATE_FORMAT',
+ 				'label': 'Date Format',
+-				'defaultValue': '%A, %m/%d',
++				'defaultValue': '%a, %m/%d',
+ 				'options': [
+-					{ 'label': 'Monday, 1/15', 'value': '%A, %m/%d' },
+-					{ 'label': 'Monday, 15/1', 'value': '%A, %d/%m' },
+-					{ 'label': 'Monday, Jan 15', 'value': '%A, %b %d' },
++					{ 'label': 'Mon, 1/15', 'value': '%a, %m/%d' },
++					{ 'label': 'Mon, 15/1', 'value': '%a, %d/%m' },
++					{ 'label': 'Mon, Jan 15', 'value': '%a, %b %d' },
+ 					{ 'label': '1/15/2026', 'value': '%m/%d/%Y' },
+ 					{ 'label': '15/1/2026', 'value': '%d/%m/%Y' },
+ 					{ 'label': '15 Jan 2026', 'value': '%d %b %Y' },
 -- 
 2.43.0
 
