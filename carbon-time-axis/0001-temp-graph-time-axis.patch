@@ -1,7 +1,7 @@
 From f37da31985bfa5d5f5043a6eea3660a2ced0e0fb Mon Sep 17 00:00:00 2001
 From: katonori <norito.kato@gmail.com>
 Date: Sat, 3 Oct 2026 00:42:57 +0000
-Subject: [PATCH 1/2] Add time axis below temperature graph
+Subject: [PATCH 1/3] Add time axis below temperature graph
 
 ---
  src/c/ui/temp_layer.c | 77 ++++++++++++++++++++++++++++++++++++++++---
@@ -125,7 +125,7 @@ index 64db279..db06930 100644
 From acedbf8d8fa21bb289eebb29a066c48cff224e45 Mon Sep 17 00:00:00 2001
 From: katonori <norito.kato@gmail.com>
 Date: Sat, 3 Oct 2026 00:47:35 +0000
-Subject: [PATCH 2/2] Use abbreviated weekday in date display
+Subject: [PATCH 2/3] Use abbreviated weekday in date display
 
 ---
  src/c/modules/settings.c | 2 +-
@@ -165,6 +165,45 @@ index aeec485..081ba25 100644
  					{ 'label': '1/15/2026', 'value': '%m/%d/%Y' },
  					{ 'label': '15/1/2026', 'value': '%d/%m/%Y' },
  					{ 'label': '15 Jan 2026', 'value': '%d %b %Y' },
+-- 
+2.43.0
+
+
+From fe1ae530bc5ef9140d5f640449b0527d9202cc5d Mon Sep 17 00:00:00 2001
+From: katonori <norito.kato@gmail.com>
+Date: Sat, 3 Oct 2026 00:51:02 +0000
+Subject: [PATCH 3/3] Force abbreviated weekday even for previously saved date
+ formats
+
+---
+ src/c/ui/time_layer.c | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/src/c/ui/time_layer.c b/src/c/ui/time_layer.c
+index 30df259..f5045df 100644
+--- a/src/c/ui/time_layer.c
++++ b/src/c/ui/time_layer.c
+@@ -195,8 +195,18 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
+ 
+ 	// Date — format string stored in settings; leading zeros stripped
+ 	// automatically.
+-	strftime(layer->date_buf, sizeof(layer->date_buf), settings->date_format,
+-	         tick_time);
++	// Always show the abbreviated weekday: formats saved by older versions
++	// still contain %A (full name), so rewrite it to %a here.
++	char date_fmt[sizeof(settings->date_format)];
++	strncpy(date_fmt, settings->date_format, sizeof(date_fmt) - 1);
++	date_fmt[sizeof(date_fmt) - 1] = '\0';
++	for (char *p = date_fmt; *p; p++) {
++		if (p[0] == '%' && p[1] == 'A')
++			p[1] = 'a';
++		if (p[0] == '%' && p[1])
++			p++; // skip the conversion character (e.g. keep %% intact)
++	}
++	strftime(layer->date_buf, sizeof(layer->date_buf), date_fmt, tick_time);
+ 	prv_remove_leading_zero(layer->date_buf, sizeof(layer->date_buf));
+ 	text_layer_set_text(layer->date_label, layer->date_buf);
+ }
 -- 
 2.43.0
 
