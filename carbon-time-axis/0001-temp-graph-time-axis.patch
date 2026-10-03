@@ -123,7 +123,7 @@ index 64db279..db06930 100644
  	}
  }
 diff --git a/src/c/ui/time_layer.c b/src/c/ui/time_layer.c
-index 30df259..3935c69 100644
+index 30df259..cf26356 100644
 --- a/src/c/ui/time_layer.c
 +++ b/src/c/ui/time_layer.c
 @@ -16,7 +16,11 @@
@@ -138,7 +138,7 @@ index 30df259..3935c69 100644
  	TextLayer *tz_label;   // timezone abbreviation, left of time
  	TextLayer *ampm_label; // AM/PM indicator, right of time (12h only)
  	TextLayer *date_label;
-@@ -41,6 +45,103 @@ static void prv_remove_leading_zero(char *buf, size_t len) {
+@@ -41,6 +45,105 @@ static void prv_remove_leading_zero(char *buf, size_t len) {
  	}
  }
  
@@ -146,6 +146,7 @@ index 30df259..3935c69 100644
 +// Draw the time with the largest system digit font, read the rendered pixels
 +// back from the frame buffer, and redraw them enlarged by the biggest simple
 +// ratio that fits the canvas (nearest-neighbour).
++#define TL_MAX_W 200 // widest supported display
 +// Minimum blank pixels kept on each side of the scaled time
 +#define TL_TIME_MARGIN 4
 +
@@ -153,18 +154,19 @@ index 30df259..3935c69 100644
 +	TimeLayer *tl = *(TimeLayer **)layer_get_data(layer);
 +	GRect bounds = layer_get_bounds(layer);
 +	int w = bounds.size.w, h = bounds.size.h;
-+	if (w > 144 || h > TL_TIME_H)
++	if (w > TL_MAX_W || h > TL_TIME_H)
 +		return;
 +
 +	graphics_context_set_fill_color(ctx, GColorBlack);
 +	graphics_fill_rect(ctx, bounds, 0, GCornerNone);
 +	graphics_context_set_text_color(ctx, GColorWhite);
 +	graphics_draw_text(ctx, tl->time_buf,
-+	                   fonts_get_system_font(TL_TIME_FONT_KEY), bounds,
++	                   fonts_get_system_font(TL_TIME_FONT_KEY),
++	                   GRect(0, -TL_STAGE_DY, w, h + TL_STAGE_DY),
 +	                   GTextOverflowModeFill, GTextAlignmentLeft, NULL);
 +
 +	// Snapshot the lit pixels into a 1-bit mask
-+	static uint8_t mask[TL_TIME_H][144 / 8];
++	static uint8_t mask[TL_TIME_H][TL_MAX_W / 8];
 +	memset(mask, 0, sizeof(mask));
 +	int minx = w, maxx = -1, miny = h, maxy = -1;
 +	GBitmap *fb = graphics_capture_frame_buffer(ctx);
@@ -242,7 +244,7 @@ index 30df259..3935c69 100644
  TimeLayer *time_layer_create(GRect frame) {
  	TimeLayer *tl = malloc(sizeof(TimeLayer));
  	if (!tl)
-@@ -57,8 +158,8 @@ TimeLayer *time_layer_create(GRect frame) {
+@@ -57,8 +160,8 @@ TimeLayer *time_layer_create(GRect frame) {
  	int w = frame.size.w;
  
  	// City name — top, small font, full width centered
@@ -253,7 +255,7 @@ index 30df259..3935c69 100644
  	text_layer_set_background_color(tl->city_label, GColorClear);
  	text_layer_set_text_color(tl->city_label, GColorWhite);
  	text_layer_set_font(tl->city_label, city_font);
-@@ -66,13 +167,20 @@ TimeLayer *time_layer_create(GRect frame) {
+@@ -66,13 +169,20 @@ TimeLayer *time_layer_create(GRect frame) {
  	text_layer_set_text(tl->city_label, tl->city_buf);
  	layer_add_child(tl->container, text_layer_get_layer(tl->city_label));
  
@@ -279,7 +281,7 @@ index 30df259..3935c69 100644
  	tl->time_label = text_layer_create(GRect(0, time_y, w, TL_TIME_H));
  	text_layer_set_background_color(tl->time_label, GColorClear);
  	text_layer_set_text_color(tl->time_label, GColorWhite);
-@@ -80,13 +188,12 @@ TimeLayer *time_layer_create(GRect frame) {
+@@ -80,13 +190,12 @@ TimeLayer *time_layer_create(GRect frame) {
  	text_layer_set_text_alignment(tl->time_label, GTextAlignmentCenter);
  	text_layer_set_text(tl->time_label, tl->time_buf);
  	layer_add_child(tl->container, text_layer_get_layer(tl->time_label));
@@ -298,7 +300,7 @@ index 30df259..3935c69 100644
  	tl->tz_label = text_layer_create(GRect(2, tz_ampm_y, 32, TL_TZ_H));
  	text_layer_set_background_color(tl->tz_label, GColorClear);
  	text_layer_set_text_color(tl->tz_label, GColorLightGray);
-@@ -95,7 +202,7 @@ TimeLayer *time_layer_create(GRect frame) {
+@@ -95,7 +204,7 @@ TimeLayer *time_layer_create(GRect frame) {
  	text_layer_set_text(tl->tz_label, tl->tz_buf);
  	layer_add_child(tl->container, text_layer_get_layer(tl->tz_label));
  
@@ -307,7 +309,7 @@ index 30df259..3935c69 100644
  	tl->ampm_label = text_layer_create(GRect(w - 34, tz_ampm_y, 32, TL_TZ_H));
  	text_layer_set_background_color(tl->ampm_label, GColorClear);
  	text_layer_set_text_color(tl->ampm_label, GColorLightGray);
-@@ -124,7 +231,11 @@ void time_layer_destroy(TimeLayer *layer) {
+@@ -124,7 +233,11 @@ void time_layer_destroy(TimeLayer *layer) {
  	text_layer_destroy(layer->date_label);
  	text_layer_destroy(layer->ampm_label);
  	text_layer_destroy(layer->tz_label);
@@ -319,7 +321,7 @@ index 30df259..3935c69 100644
  	text_layer_destroy(layer->city_label);
  	layer_destroy(layer->container);
  	free(layer);
-@@ -175,7 +286,11 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
+@@ -175,7 +288,11 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
  		// AM/PM
  		strftime(layer->ampm_buf, sizeof(layer->ampm_buf), "%p", tick_time);
  	}
@@ -332,38 +334,47 @@ index 30df259..3935c69 100644
  	layer_set_hidden(text_layer_get_layer(layer->ampm_label),
  	                 !settings->show_ampm);
 diff --git a/src/c/ui/time_layer.h b/src/c/ui/time_layer.h
-index c18168b..703c0ca 100644
+index c18168b..8fd7149 100644
 --- a/src/c/ui/time_layer.h
 +++ b/src/c/ui/time_layer.h
-@@ -27,15 +27,30 @@
- #define TL_TIME_H 62
- #define TL_TIME_PAD 14
+@@ -20,22 +20,34 @@
+ #define TL_SMALL_FONT_KEY FONT_KEY_GOTHIC_18
+ #define TL_SMALL_H 22
+ #endif
+-// LECO_60 on emery (>=228px); LECO_36_BOLD everywhere else.
+-// TL_TIME_PAD is the internal top gap measured from each font's line metrics.
++// The time is drawn with the biggest system digit font (LECO_60 on emery,
++// LECO_42 elsewhere) and then pixel-scaled up, see prv_time_canvas_update.
++// TL_TIME_H is the height of the canvas the scaled digits are centered in;
++// TL_STAGE_DY is the font's internal top gap, skipped when staging the text.
++#define TL_TIME_SCALED 1
++#define TL_TIME_PAD 0
+ #if PBL_DISPLAY_HEIGHT >= 228
+ #define TL_TIME_FONT_KEY FONT_KEY_LECO_60_NUMBERS_AM_PM
+-#define TL_TIME_H 62
+-#define TL_TIME_PAD 14
++#define TL_TIME_H 58
++#define TL_STAGE_DY 14
++// City / timezone / AM-PM row
++#define TL_TZ_FONT_KEY FONT_KEY_GOTHIC_14
++#define TL_CITY_FONT_KEY FONT_KEY_GOTHIC_14
++#define TL_TZ_H 16
++#define TL_CITY_H 16
  #else
 -#define TL_TIME_FONT_KEY FONT_KEY_LECO_36_BOLD_NUMBERS
 -#define TL_TIME_H 40
 -#define TL_TIME_PAD 4
-+// Below emery the biggest system digit font is LECO_42, so the time is
-+// rendered with it and then pixel-scaled up (see prv_time_canvas_update).
-+// TL_TIME_H is the height of that canvas; the scaled digits are centered in it.
 +#define TL_TIME_FONT_KEY FONT_KEY_LECO_42_NUMBERS
 +#define TL_TIME_H 46
-+#define TL_TIME_PAD 0
-+#define TL_TIME_SCALED 1
- #endif
--// Height of the TZ / AM-PM labels (GOTHIC_14, constant across platforms)
-+// City / timezone / AM-PM row. Emery keeps GOTHIC_14 labels in its taller
-+// city row; smaller screens use the tiny GOTHIC_09 so the time gets the room.
-+#if defined(TL_TIME_SCALED)
++#define TL_STAGE_DY 0
++// City / timezone / AM-PM row: tiny font so the time gets the room
 +#define TL_TZ_FONT_KEY FONT_KEY_GOTHIC_09
 +#define TL_CITY_FONT_KEY FONT_KEY_GOTHIC_09
 +#define TL_TZ_H 11
 +#define TL_CITY_H 11
-+#else
-+#define TL_TZ_FONT_KEY FONT_KEY_GOTHIC_14
-+#define TL_CITY_FONT_KEY TL_SMALL_FONT_KEY
- #define TL_TZ_H 18
-+#define TL_CITY_H TL_SMALL_H
-+#endif
+ #endif
+-// Height of the TZ / AM-PM labels (GOTHIC_14, constant across platforms)
+-#define TL_TZ_H 18
  // Total visible block height used by main.c to size the layer frame.
  // Derived automatically so it can never fall out of sync with the values above.
 -#define TL_TIME_BLOCK_H ((TL_SMALL_H - TL_TIME_PAD) + TL_TIME_H + TL_SMALL_H)

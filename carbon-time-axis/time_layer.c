@@ -49,6 +49,7 @@ static void prv_remove_leading_zero(char *buf, size_t len) {
 // Draw the time with the largest system digit font, read the rendered pixels
 // back from the frame buffer, and redraw them enlarged by the biggest simple
 // ratio that fits the canvas (nearest-neighbour).
+#define TL_MAX_W 200 // widest supported display
 // Minimum blank pixels kept on each side of the scaled time
 #define TL_TIME_MARGIN 4
 
@@ -56,18 +57,19 @@ static void prv_time_canvas_update(Layer *layer, GContext *ctx) {
 	TimeLayer *tl = *(TimeLayer **)layer_get_data(layer);
 	GRect bounds = layer_get_bounds(layer);
 	int w = bounds.size.w, h = bounds.size.h;
-	if (w > 144 || h > TL_TIME_H)
+	if (w > TL_MAX_W || h > TL_TIME_H)
 		return;
 
 	graphics_context_set_fill_color(ctx, GColorBlack);
 	graphics_fill_rect(ctx, bounds, 0, GCornerNone);
 	graphics_context_set_text_color(ctx, GColorWhite);
 	graphics_draw_text(ctx, tl->time_buf,
-	                   fonts_get_system_font(TL_TIME_FONT_KEY), bounds,
+	                   fonts_get_system_font(TL_TIME_FONT_KEY),
+	                   GRect(0, -TL_STAGE_DY, w, h + TL_STAGE_DY),
 	                   GTextOverflowModeFill, GTextAlignmentLeft, NULL);
 
 	// Snapshot the lit pixels into a 1-bit mask
-	static uint8_t mask[TL_TIME_H][144 / 8];
+	static uint8_t mask[TL_TIME_H][TL_MAX_W / 8];
 	memset(mask, 0, sizeof(mask));
 	int minx = w, maxx = -1, miny = h, maxy = -1;
 	GBitmap *fb = graphics_capture_frame_buffer(ctx);

@@ -20,33 +20,30 @@
 #define TL_SMALL_FONT_KEY FONT_KEY_GOTHIC_18
 #define TL_SMALL_H 22
 #endif
-// LECO_60 on emery (>=228px); LECO_36_BOLD everywhere else.
-// TL_TIME_PAD is the internal top gap measured from each font's line metrics.
+// The time is drawn with the biggest system digit font (LECO_60 on emery,
+// LECO_42 elsewhere) and then pixel-scaled up, see prv_time_canvas_update.
+// TL_TIME_H is the height of the canvas the scaled digits are centered in;
+// TL_STAGE_DY is the font's internal top gap, skipped when staging the text.
+#define TL_TIME_SCALED 1
+#define TL_TIME_PAD 0
 #if PBL_DISPLAY_HEIGHT >= 228
 #define TL_TIME_FONT_KEY FONT_KEY_LECO_60_NUMBERS_AM_PM
-#define TL_TIME_H 62
-#define TL_TIME_PAD 14
+#define TL_TIME_H 58
+#define TL_STAGE_DY 14
+// City / timezone / AM-PM row
+#define TL_TZ_FONT_KEY FONT_KEY_GOTHIC_14
+#define TL_CITY_FONT_KEY FONT_KEY_GOTHIC_14
+#define TL_TZ_H 16
+#define TL_CITY_H 16
 #else
-// Below emery the biggest system digit font is LECO_42, so the time is
-// rendered with it and then pixel-scaled up (see prv_time_canvas_update).
-// TL_TIME_H is the height of that canvas; the scaled digits are centered in it.
 #define TL_TIME_FONT_KEY FONT_KEY_LECO_42_NUMBERS
 #define TL_TIME_H 46
-#define TL_TIME_PAD 0
-#define TL_TIME_SCALED 1
-#endif
-// City / timezone / AM-PM row. Emery keeps GOTHIC_14 labels in its taller
-// city row; smaller screens use the tiny GOTHIC_09 so the time gets the room.
-#if defined(TL_TIME_SCALED)
+#define TL_STAGE_DY 0
+// City / timezone / AM-PM row: tiny font so the time gets the room
 #define TL_TZ_FONT_KEY FONT_KEY_GOTHIC_09
 #define TL_CITY_FONT_KEY FONT_KEY_GOTHIC_09
 #define TL_TZ_H 11
 #define TL_CITY_H 11
-#else
-#define TL_TZ_FONT_KEY FONT_KEY_GOTHIC_14
-#define TL_CITY_FONT_KEY TL_SMALL_FONT_KEY
-#define TL_TZ_H 18
-#define TL_CITY_H TL_SMALL_H
 #endif
 // Total visible block height used by main.c to size the layer frame.
 // Derived automatically so it can never fall out of sync with the values above.

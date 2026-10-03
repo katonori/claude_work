@@ -19,5 +19,5 @@ pebble build
 ビルド済みの `carbon-time-axis.pbw` をそのままインストールすることもできます。
 
 ## スクリーンショット
-- 時刻表示を大きく(basalt/diorite/flint/aplite: LECO_42 を描画後に 4/3〜3/2 倍へピクセル拡大。システムフォントは42が上限のため)。タイムゾーン/都市名/AM-PM は時刻行から外し、GOTHIC_09 の小フォントで1行にまとめた
+- 時刻表示を大きく(basalt/diorite/flint/aplite: LECO_42(emery は LECO_60)を描画後に 4/3〜3/2 倍へピクセル拡大。システムフォントは42が上限のため)。タイムゾーン/都市名/AM-PM は時刻行から外し、GOTHIC_09 の小フォントで1行にまとめた
 `screenshots/` に変更前(before_basalt)と変更後(basalt / basalt 12h / diorite / emery)を同梱。
