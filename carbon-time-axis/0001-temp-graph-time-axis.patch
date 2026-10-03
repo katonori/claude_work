@@ -1,0 +1,123 @@
+From f37da31985bfa5d5f5043a6eea3660a2ced0e0fb Mon Sep 17 00:00:00 2001
+From: katonori <norito.kato@gmail.com>
+Date: Sat, 3 Oct 2026 00:42:57 +0000
+Subject: [PATCH] Add time axis below temperature graph
+
+---
+ src/c/ui/temp_layer.c | 77 ++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 73 insertions(+), 4 deletions(-)
+
+diff --git a/src/c/ui/temp_layer.c b/src/c/ui/temp_layer.c
+index 64db279..db06930 100644
+--- a/src/c/ui/temp_layer.c
++++ b/src/c/ui/temp_layer.c
+@@ -13,6 +13,21 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ 
++// Time axis strip reserved below the sparkline: tick marks every 3 hours plus
++// hour labels every 6 hours (aligned to the wall clock: 0, 6, 12, 18).
++#if PBL_DISPLAY_HEIGHT >= 228
++#define AXIS_FONT_KEY FONT_KEY_GOTHIC_14
++#define AXIS_H 14   // strip height, including ticks
++#define AXIS_LEAD 5 // GOTHIC_14 internal top leading above digits
++#define AXIS_TEXT_H 16
++#else
++#define AXIS_FONT_KEY FONT_KEY_GOTHIC_09
++#define AXIS_H 10
++#define AXIS_LEAD 3 // GOTHIC_09 internal top leading above digits
++#define AXIS_TEXT_H 11
++#endif
++#define AXIS_TICK_H 2 // minor (3h) tick length; labeled (6h) ticks are +1
++
+ struct TempLayer {
+ 	Layer *layer;
+ 	int16_t current;
+@@ -112,8 +127,10 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 	if (t_range < 1)
+ 		t_range = 1;
+ 
++	// Sparkline area excludes the time axis strip at the bottom
++	int plot_h = lh - AXIS_H;
+ 	int pad = 4;
+-	int graph_h = lh - pad * 2;
++	int graph_h = plot_h - pad * 2;
+ 
+ 	// Pre-compute pixel positions for both lines
+ 	int spx[25], spy[25];
+@@ -126,9 +143,9 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 	}
+ 
+ #if defined(PBL_COLOR)
+-	int line_bottom = lh - 1;
++	int line_bottom = plot_h - 1;
+ // Two-pass color rendering:
+-//   Pass 1 — dark fill from the line position down to the bottom of the layer.
++//   Pass 1 — dark fill from the line position down to the bottom of the plot.
+ //   Pass 2 — light-colored 1px line drawn on top at the actual-temp position.
+ //   Pass 3 — white 1px line for apparent temperature over everything.
+ //
+@@ -235,7 +252,59 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 			    ctx, PBL_IF_COLOR_ELSE(in_sparkline ? GColorBlack : GColorWhite,
+ 			                           GColorWhite));
+ 			int tx = graph_x + off * bar_w;
+-			graphics_draw_line(ctx, GPoint(tx, lh - 4), GPoint(tx, lh - 1));
++			graphics_draw_line(ctx, GPoint(tx, plot_h - 4),
++			                   GPoint(tx, plot_h - 1));
++		}
++	}
++
++	// Time axis: ticks every 3 hours, labels every 6 hours. Offset 0 is the
++	// current hour at the left edge of the graph.
++	{
++		GFont axis_font = fonts_get_system_font(AXIS_FONT_KEY);
++		bool is_24h = clock_is_24h_style();
++		int right = bounds.size.w;
++		graphics_context_set_stroke_width(ctx, 1);
++		graphics_context_set_stroke_color(
++		    ctx, PBL_IF_COLOR_ELSE(GColorLightGray, GColorWhite));
++		graphics_context_set_text_color(
++		    ctx, PBL_IF_COLOR_ELSE(GColorLightGray, GColorWhite));
++		for (int off = 0; off <= GRAPH_HOURS; off++) {
++			int hour = ((int)tl->current_hour + off) % 24;
++			if (hour % 3 != 0)
++				continue;
++			int tx = graph_x + off * graph_w / GRAPH_HOURS;
++			bool labeled = (hour % 6 == 0);
++			int tick_h = labeled ? AXIS_TICK_H + 1 : AXIS_TICK_H;
++			if (tx > graph_x && tx < right)
++				graphics_draw_line(ctx, GPoint(tx, plot_h),
++				                   GPoint(tx, plot_h + tick_h - 1));
++			if (!labeled || off == GRAPH_HOURS)
++				continue;
++
++			static char label[4];
++			if (is_24h) {
++				snprintf(label, sizeof(label), "%d", hour);
++			} else {
++				int h12 = hour % 12 == 0 ? 12 : hour % 12;
++				snprintf(label, sizeof(label), "%d%c", h12,
++				         hour < 12 ? 'A' : 'P');
++			}
++			// Center the label on its tick, clamped inside the graph area
++			int label_w = 20;
++			int lx = tx - label_w / 2;
++			GSize sz = graphics_text_layout_get_content_size(
++			    label, axis_font, GRect(0, 0, label_w, AXIS_TEXT_H),
++			    GTextOverflowModeFill, GTextAlignmentCenter);
++			int text_l = tx - sz.w / 2;
++			if (text_l < graph_x + 1)
++				lx += graph_x + 1 - text_l;
++			if (text_l + sz.w > right)
++				lx -= text_l + sz.w - right;
++			graphics_draw_text(ctx, label, axis_font,
++			                   GRect(lx, plot_h + AXIS_TICK_H + 2 - AXIS_LEAD,
++			                         label_w, AXIS_TEXT_H),
++			                   GTextOverflowModeFill, GTextAlignmentCenter,
++			                   NULL);
+ 		}
+ 	}
+ }
+-- 
+2.43.0
+
