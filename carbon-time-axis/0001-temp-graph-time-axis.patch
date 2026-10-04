@@ -295,6 +295,46 @@ index c587fc8..1d59bf4 100644
  // Draw a dotted line by sampling pixels along the segment. This is mainly for
  // monochrome screens where dashed strokes are not available.
  static inline void graph_draw_dotted_line(GContext *ctx, GPoint start,
+diff --git a/src/c/ui/icon_bar_layer.c b/src/c/ui/icon_bar_layer.c
+index ae74662..facd01b 100644
+--- a/src/c/ui/icon_bar_layer.c
++++ b/src/c/ui/icon_bar_layer.c
+@@ -107,11 +107,30 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 	if (sl->battery_display == BATTERY_DISPLAY_PERCENT) {
+ 		char pct_buf[5];
+ 		snprintf(pct_buf, sizeof(pct_buf), "%d", sl->battery_percent);
+-		GFont small_font = fonts_get_system_font(FONT_KEY_GOTHIC_14);
+-		int y0 = (zone_h - 14) / 2;
+-		graphics_draw_text(ctx, pct_buf, small_font, GRect(0, y0, graph_x, 18),
+-		                   GTextOverflowModeTrailingEllipsis,
+-		                   GTextAlignmentCenter, NULL);
++		// Battery percentage has its own font, independent of the other small
++		// labels: the largest candidate whose text fits the label column.
++		// 3-digit "100" falls back to a smaller font on narrow screens.
++		static const char *const pct_fonts[] = {
++		    FONT_KEY_GOTHIC_18_BOLD, FONT_KEY_GOTHIC_18, FONT_KEY_GOTHIC_14};
++		GFont pct_font = fonts_get_system_font(pct_fonts[2]);
++		int pct_h = 14;
++		for (unsigned i = 0; i < sizeof(pct_fonts) / sizeof(pct_fonts[0]);
++		     i++) {
++			GFont f = fonts_get_system_font(pct_fonts[i]);
++			GSize sz = graphics_text_layout_get_content_size(
++			    pct_buf, f, GRect(0, 0, 144, 30), GTextOverflowModeFill,
++			    GTextAlignmentCenter);
++			if (sz.w <= graph_x - 2) {
++				pct_font = f;
++				pct_h = (i < 2) ? 18 : 14;
++				break;
++			}
++		}
++		// Rect is taller than the glyphs; offset by the font's top leading
++		int y0 = (zone_h - pct_h) / 2 - (pct_h == 18 ? 3 : 0);
++		graphics_draw_text(
++		    ctx, pct_buf, pct_font, GRect(0, y0, graph_x, pct_h + 4),
++		    GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+ 	} else {
+ 		int y0 = (zone_h - icon_size) / 2;
+ 		graphics_draw_text(
 diff --git a/src/c/ui/precip_layer.c b/src/c/ui/precip_layer.c
 index 2608785..44d445d 100644
 --- a/src/c/ui/precip_layer.c
