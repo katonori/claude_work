@@ -15,7 +15,6 @@
 
 struct TimeLayer {
 	Layer *container;
-	TextLayer *city_label;
 #if defined(TL_TIME_SCALED)
 	Layer *time_canvas; // time digits, drawn pixel-scaled
 #else
@@ -29,7 +28,8 @@ struct TimeLayer {
 	char tz_buf[8];
 	char tz_override[8]; // set by time_layer_set_timezone; overrides strftime
 	char ampm_buf[4];
-	char date_buf[32];
+	char date_part[32]; // formatted date only
+	char date_buf[72];  // "<city>  <date>" as shown
 };
 
 static void prv_remove_leading_zero(char *buf, size_t len) {
@@ -144,6 +144,33 @@ static void prv_time_canvas_update(Layer *layer, GContext *ctx) {
 }
 #endif
 
+// Build the line under the time: "<city>  <date>". When the pair is too wide
+// for the screen the city is shortened (at a UTF-8 character boundary, with an
+// ellipsis); if even one character does not fit, only the date is shown.
+static void prv_compose_date_line(TimeLayer *layer) {
+	GFont font = fonts_get_system_font(TL_SMALL_FONT_KEY);
+	int max_w = layer_get_bounds(layer->container).size.w - 4;
+	int city_len = (int)strlen(layer->city_buf);
+
+	for (int n = city_len; n > 0; n--) {
+		// Never cut in the middle of a multi-byte character
+		if (n < city_len && (layer->city_buf[n] & 0xC0) == 0x80)
+			continue;
+		snprintf(layer->date_buf, sizeof(layer->date_buf), "%.*s%s  %s", n,
+		         layer->city_buf, n < city_len ? "\xe2\x80\xa6" : "",
+		         layer->date_part);
+		GSize sz = graphics_text_layout_get_content_size(
+		    layer->date_buf, font, GRect(0, 0, 400, TL_SMALL_H),
+		    GTextOverflowModeFill, GTextAlignmentCenter);
+		if (sz.w <= max_w) {
+			text_layer_set_text(layer->date_label, layer->date_buf);
+			return;
+		}
+	}
+	snprintf(layer->date_buf, sizeof(layer->date_buf), "%s", layer->date_part);
+	text_layer_set_text(layer->date_label, layer->date_buf);
+}
+
 TimeLayer *time_layer_create(GRect frame) {
 	TimeLayer *tl = malloc(sizeof(TimeLayer));
 	if (!tl)
@@ -154,20 +181,11 @@ TimeLayer *time_layer_create(GRect frame) {
 	tl->tz_buf[0] = '\0';
 	tl->tz_override[0] = '\0';
 	tl->ampm_buf[0] = '\0';
+	tl->date_part[0] = '\0';
 	tl->date_buf[0] = '\0';
 
 	tl->container = layer_create(frame);
 	int w = frame.size.w;
-
-	// City name — top, small font, full width centered
-	GFont city_font = fonts_get_system_font(TL_CITY_FONT_KEY);
-	tl->city_label = text_layer_create(GRect(0, 0, w, TL_CITY_H));
-	text_layer_set_background_color(tl->city_label, GColorClear);
-	text_layer_set_text_color(tl->city_label, GColorWhite);
-	text_layer_set_font(tl->city_label, city_font);
-	text_layer_set_text_alignment(tl->city_label, GTextAlignmentCenter);
-	text_layer_set_text(tl->city_label, tl->city_buf);
-	layer_add_child(tl->container, text_layer_get_layer(tl->city_label));
 
 	// Time — large centered. LECO_60 on emery (>=228px); LECO_42 pixel-scaled
 	// everywhere else. TL_TIME_PAD is the internal top gap measured from the
@@ -213,8 +231,9 @@ TimeLayer *time_layer_create(GRect frame) {
 	text_layer_set_text(tl->ampm_label, tl->ampm_buf);
 	layer_add_child(tl->container, text_layer_get_layer(tl->ampm_label));
 
-	// Date — below time
-	int date_y = time_y + TL_TIME_H;
+	// City + date — below time. The rect overlaps the time canvas by the font's
+	// blank top leading.
+	int date_y = time_y + TL_TIME_H - TL_DATE_LEAD;
 	GFont date_font = fonts_get_system_font(TL_SMALL_FONT_KEY);
 	tl->date_label = text_layer_create(GRect(0, date_y, w, TL_SMALL_H));
 	text_layer_set_background_color(tl->date_label, GColorClear);
@@ -238,7 +257,6 @@ void time_layer_destroy(TimeLayer *layer) {
 #else
 	text_layer_destroy(layer->time_label);
 #endif
-	text_layer_destroy(layer->city_label);
 	layer_destroy(layer->container);
 	free(layer);
 }
@@ -263,7 +281,7 @@ void time_layer_set_city(TimeLayer *layer, const char *city) {
 		return;
 	strncpy(layer->city_buf, city, sizeof(layer->city_buf) - 1);
 	layer->city_buf[sizeof(layer->city_buf) - 1] = '\0';
-	text_layer_set_text(layer->city_label, layer->city_buf);
+	prv_compose_date_line(layer);
 }
 
 void time_layer_update(TimeLayer *layer, struct tm *tick_time,
@@ -312,8 +330,8 @@ void time_layer_update(TimeLayer *layer, struct tm *tick_time,
 
 	// Date — format string stored in settings; leading zeros stripped
 	// automatically.
-	strftime(layer->date_buf, sizeof(layer->date_buf), settings->date_format,
+	strftime(layer->date_part, sizeof(layer->date_part), settings->date_format,
 	         tick_time);
-	prv_remove_leading_zero(layer->date_buf, sizeof(layer->date_buf));
-	text_layer_set_text(layer->date_label, layer->date_buf);
+	prv_remove_leading_zero(layer->date_part, sizeof(layer->date_part));
+	prv_compose_date_line(layer);
 }

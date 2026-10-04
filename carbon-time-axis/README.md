@@ -24,4 +24,5 @@ pebble build
 - 設定ページに「Background」(Dark / Light)を追加。Light は画面全体の白黒(灰色も)を反転して白背景・黒文字/黒線にする(色付きの塗りはそのまま)。最前面の ThemeLayer がフレームバッファを反転する方式
 - バッテリー残量(%)表示は専用フォントに分離し、GOTHIC_18_BOLD(収まらない3桁の100%は GOTHIC_14)で大きく表示
 - 最高・最低気温は大きいフォントに変更(144px幅機種: GOTHIC_18、emery: GOTHIC_24。3桁や負数で列に収まらない場合は一段小さいフォントへ自動で切替)
+- 都市名を時刻の上から時刻の下へ移動し、日付の前に表示(`Chicago  Thu, 5/28`)。都市名・日付のフォントを一段大きく(144px幅機種: GOTHIC_14→18、emery: GOTHIC_18→24)。画面に収まらない長い都市名は末尾を「…」で省略
 `screenshots/` に変更前(before_basalt)と変更後(basalt / basalt 12h / diorite / emery)を同梱。

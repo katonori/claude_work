@@ -12,13 +12,17 @@
 #include <pebble.h>
 
 // Time block layout constants — all tweakable values live here.
-// City and date always share the same font and height.
+// The line under the time shows "<city>  <date>". TL_SMALL_H is its rect height
+// and TL_DATE_LEAD the font's blank top leading, which the rect overlaps with
+// the time canvas above it.
 #if PBL_DISPLAY_HEIGHT <= 168
-#define TL_SMALL_FONT_KEY FONT_KEY_GOTHIC_14
-#define TL_SMALL_H 16
-#else
 #define TL_SMALL_FONT_KEY FONT_KEY_GOTHIC_18
 #define TL_SMALL_H 22
+#define TL_DATE_LEAD 4
+#else
+#define TL_SMALL_FONT_KEY FONT_KEY_GOTHIC_24
+#define TL_SMALL_H 28
+#define TL_DATE_LEAD 6
 #endif
 // The time is drawn with the biggest system digit font (LECO_60 on emery,
 // LECO_42 elsewhere) and then pixel-scaled up, see prv_time_canvas_update.
@@ -30,24 +34,23 @@
 #define TL_TIME_FONT_KEY FONT_KEY_LECO_60_NUMBERS_AM_PM
 #define TL_TIME_H 58
 #define TL_STAGE_DY 14
-// City / timezone / AM-PM row
+// Timezone / AM-PM row
 #define TL_TZ_FONT_KEY FONT_KEY_GOTHIC_14
-#define TL_CITY_FONT_KEY FONT_KEY_GOTHIC_14
 #define TL_TZ_H 16
 #define TL_CITY_H 16
 #else
 #define TL_TIME_FONT_KEY FONT_KEY_LECO_42_NUMBERS
-#define TL_TIME_H 46
+#define TL_TIME_H 44
 #define TL_STAGE_DY 0
-// City / timezone / AM-PM row: tiny font so the time gets the room
+// Timezone / AM-PM row: tiny font so the time gets the room
 #define TL_TZ_FONT_KEY FONT_KEY_GOTHIC_09
-#define TL_CITY_FONT_KEY FONT_KEY_GOTHIC_09
 #define TL_TZ_H 11
 #define TL_CITY_H 11
 #endif
 // Total visible block height used by main.c to size the layer frame.
 // Derived automatically so it can never fall out of sync with the values above.
-#define TL_TIME_BLOCK_H ((TL_CITY_H - TL_TIME_PAD) + TL_TIME_H + TL_SMALL_H)
+#define TL_TIME_BLOCK_H \
+	((TL_CITY_H - TL_TIME_PAD) + TL_TIME_H + TL_SMALL_H - TL_DATE_LEAD)
 
 typedef struct TimeLayer TimeLayer;
 
