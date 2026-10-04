@@ -37,6 +37,7 @@ struct TempLayer {
 	int8_t apparent_hourly[GRAPH_HOURS];
 	uint8_t current_hour;
 	uint8_t hours_remaining;
+	uint8_t range_hours; // 12 or 24
 	bool celsius;
 };
 
@@ -46,6 +47,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	int lh = bounds.size.h;
 	int graph_x = GRAPH_OFFSET_X;
 	int graph_w = bounds.size.w - graph_x;
+	int range = tl->range_hours; // hours spanned by the sparkline and axis
 
 #if PBL_DISPLAY_HEIGHT >= 228
 	GFont font_sm = fonts_get_system_font(FONT_KEY_GOTHIC_18);
@@ -100,20 +102,20 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	// two lines share the same y-scale.
 	int16_t pts[25];
 	pts[0] = tl->current;
-	for (int i = 0; i < GRAPH_HOURS; i++)
+	for (int i = 0; i < range; i++)
 		pts[i + 1] = tl->hourly[i];
 
 	int16_t apt[25];
 	apt[0] = tl->apparent_hourly[0]; // no separate "current apparent"; use
 	                                 // first hourly
-	for (int i = 0; i < GRAPH_HOURS; i++)
+	for (int i = 0; i < range; i++)
 		apt[i + 1] = tl->apparent_hourly[i];
 
 	// Bound the scale to the actual values in the two 24-hour arrays so the
 	// lines always fill the available vertical space correctly.
 	int16_t t_min = pts[0] < apt[0] ? pts[0] : apt[0];
 	int16_t t_max = pts[0] > apt[0] ? pts[0] : apt[0];
-	for (int i = 1; i < 25; i++) {
+	for (int i = 1; i <= range; i++) {
 		if (pts[i] < t_min)
 			t_min = pts[i];
 		if (pts[i] > t_max)
@@ -135,8 +137,8 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	// Pre-compute pixel positions for both lines
 	int spx[25], spy[25];
 	int apx[25], apy[25];
-	for (int i = 0; i < 25; i++) {
-		spx[i] = graph_x + i * graph_w / 24;
+	for (int i = 0; i <= range; i++) {
+		spx[i] = graph_x + i * graph_w / range;
 		spy[i] = pad + graph_h - ((pts[i] - t_min) * graph_h / t_range);
 		apx[i] = spx[i];
 		apy[i] = pad + graph_h - ((apt[i] - t_min) * graph_h / t_range);
@@ -176,7 +178,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	              : GColorRed)
 
 	// Pass 1: dark fills
-	for (int i = 1; i <= (int)tl->hours_remaining && i < 25; i++) {
+	for (int i = 1; i <= (int)tl->hours_remaining && i <= range; i++) {
 		int avg = ((int)pts[i - 1] + (int)pts[i]) / 2;
 		graphics_context_set_fill_color(ctx, DARK_TEMP_COLOR(TEMP_TO_F(avg)));
 		int x0 = spx[i - 1], y0 = spy[i - 1], x1 = spx[i], y1 = spy[i];
@@ -197,7 +199,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 
 	// Pass 2: light-colored actual-temp line on top of the fill
 	graphics_context_set_stroke_width(ctx, 1);
-	for (int i = 1; i <= (int)tl->hours_remaining && i < 25; i++) {
+	for (int i = 1; i <= (int)tl->hours_remaining && i <= range; i++) {
 		int avg = ((int)pts[i - 1] + (int)pts[i]) / 2;
 		graphics_context_set_stroke_color(ctx,
 		                                  LIGHT_TEMP_COLOR(TEMP_TO_F(avg)));
@@ -207,7 +209,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 
 	// Pass 3: white apparent-temp line over everything
 	graphics_context_set_stroke_color(ctx, GColorWhite);
-	for (int i = 1; i <= (int)tl->hours_remaining && i < 25; i++) {
+	for (int i = 1; i <= (int)tl->hours_remaining && i <= range; i++) {
 		graphics_draw_line(ctx, GPoint(apx[i - 1], apy[i - 1]),
 		                   GPoint(apx[i], apy[i]));
 	}
@@ -219,14 +221,14 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	// B&W: white actual-temp line + dotted apparent-temp line.
 	graphics_context_set_stroke_width(ctx, 1);
 	graphics_context_set_stroke_color(ctx, GColorWhite);
-	for (int i = 1; i <= (int)tl->hours_remaining && i < 25; i++) {
+	for (int i = 1; i <= (int)tl->hours_remaining && i <= range; i++) {
 		graphics_draw_line(ctx, GPoint(spx[i - 1], spy[i - 1]),
 		                   GPoint(spx[i], spy[i]));
 	}
 
 	// Pebble's b&w path does not offer dashed strokes, so render the apparent
 	// temperature as sampled pixels along each segment instead.
-	for (int i = 1; i <= (int)tl->hours_remaining && i < 25; i++) {
+	for (int i = 1; i <= (int)tl->hours_remaining && i <= range; i++) {
 		graph_draw_dotted_line(ctx, GPoint(apx[i - 1], apy[i - 1]),
 		                       GPoint(apx[i], apy[i]), 3);
 	}
@@ -237,7 +239,6 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	// sparkline fill (contrasts against color), white when it falls in the
 	// empty region or there is no sparkline at all.
 	{
-		int bar_w = graph_w / GRAPH_HOURS;
 		int offsets[2] = {
 		    (12 - (int)tl->current_hour + 24) % 24, // noon
 		    (24 - (int)tl->current_hour) % 24,      // midnight
@@ -245,19 +246,20 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		graphics_context_set_stroke_width(ctx, 1);
 		for (int i = 0; i < 2; i++) {
 			int off = offsets[i];
-			if (off == 0)
+			if (off == 0 || off >= range)
 				continue;
 			bool in_sparkline = (off < (int)tl->hours_remaining);
 			graphics_context_set_stroke_color(
 			    ctx, PBL_IF_COLOR_ELSE(in_sparkline ? GColorBlack : GColorWhite,
 			                           GColorWhite));
-			int tx = graph_x + off * bar_w;
+			int tx = graph_x + off * graph_w / range;
 			graphics_draw_line(ctx, GPoint(tx, plot_h - 4),
 			                   GPoint(tx, plot_h - 1));
 		}
 	}
 
-	// Time axis: ticks every 3 hours, labels every 6 hours. Offset 0 is the
+	// Time axis: 24h range ticks every 3 hours and labels every 6; 12h range
+	// ticks every hour and labels every 3. Offset 0 is the
 	// current hour at the left edge of the graph.
 	{
 		GFont axis_font = fonts_get_system_font(AXIS_FONT_KEY);
@@ -268,17 +270,19 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 		    ctx, PBL_IF_COLOR_ELSE(GColorLightGray, GColorWhite));
 		graphics_context_set_text_color(
 		    ctx, PBL_IF_COLOR_ELSE(GColorLightGray, GColorWhite));
-		for (int off = 0; off <= GRAPH_HOURS; off++) {
+		int tick_step = range == 12 ? 1 : 3;
+		int label_step = range == 12 ? 3 : 6;
+		for (int off = 0; off <= range; off++) {
 			int hour = ((int)tl->current_hour + off) % 24;
-			if (hour % 3 != 0)
+			if (hour % tick_step != 0)
 				continue;
-			int tx = graph_x + off * graph_w / GRAPH_HOURS;
-			bool labeled = (hour % 6 == 0);
+			int tx = graph_x + off * graph_w / range;
+			bool labeled = (hour % label_step == 0);
 			int tick_h = labeled ? AXIS_TICK_H + 1 : AXIS_TICK_H;
 			if (tx > graph_x && tx < right)
 				graphics_draw_line(ctx, GPoint(tx, plot_h),
 				                   GPoint(tx, plot_h + tick_h - 1));
-			if (!labeled || off == GRAPH_HOURS)
+			if (!labeled || off == range)
 				continue;
 
 			static char label[4];
@@ -318,6 +322,7 @@ TempLayer *temp_layer_create(GRect frame) {
 	tl->low = 0;
 	tl->current_hour = 0;
 	tl->hours_remaining = GRAPH_HOURS;
+	tl->range_hours = GRAPH_HOURS;
 	tl->celsius = false;
 	memset(tl->hourly, 0, sizeof(tl->hourly));
 	memset(tl->apparent_hourly, 0, sizeof(tl->apparent_hourly));
@@ -368,5 +373,12 @@ void temp_layer_set_current_hour(TempLayer *layer, uint8_t current_hour,
 		return;
 	layer->current_hour = current_hour;
 	layer->hours_remaining = hours_remaining;
+	layer_mark_dirty(layer->layer);
+}
+
+void temp_layer_set_range(TempLayer *layer, uint8_t range_hours) {
+	if (!layer)
+		return;
+	layer->range_hours = (range_hours == 12) ? 12 : GRAPH_HOURS;
 	layer_mark_dirty(layer->layer);
 }

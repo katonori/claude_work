@@ -1,8 +1,48 @@
+diff --git a/package.json b/package.json
+index f85ccac..5ab7d4c 100644
+--- a/package.json
++++ b/package.json
+@@ -46,6 +46,7 @@
+       "CITY_NAME",
+       "SETTING_TEMP_UNIT",
+       "SETTING_FETCH_INTERVAL",
++      "SETTING_TEMP_RANGE",
+       "SETTING_ACCENT_COLOR",
+       "SETTING_DATE_FORMAT",
+       "SETTING_BATTERY_DISPLAY",
+diff --git a/src/c/main.c b/src/c/main.c
+index 327dece..f3279af 100644
+--- a/src/c/main.c
++++ b/src/c/main.c
+@@ -230,6 +230,7 @@ static void prv_push_weather_to_layers(struct tm *now) {
+ 	                                    data_age_sec >= stale_threshold_sec ||
+ 	                                    hours_remaining == 0);
+ 	temp_layer_set_unit(s_temp_layer, settings_get()->temp_unit_celsius);
++	temp_layer_set_range(s_temp_layer, settings_get()->temp_range_hours);
+ 	temp_layer_set_data(s_temp_layer, display_temp, s_weather.high_temp,
+ 	                    s_weather.low_temp, temp_view, appar_view, current_hour,
+ 	                    hours_remaining);
+@@ -247,6 +248,7 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
+ 	// Check for settings changes first
+ 	settings_apply_from_message(iter);
+ 	temp_layer_set_unit(s_temp_layer, settings_get()->temp_unit_celsius);
++	temp_layer_set_range(s_temp_layer, settings_get()->temp_range_hours);
+ 	icon_bar_layer_set_battery_display(s_icon_bar_layer,
+ 	                                   settings_get()->battery_display);
+ 	// Apply date format immediately rather than waiting for the next tick.
+@@ -439,6 +441,7 @@ static void prv_window_load(Window *window) {
+ 	// bottom
+ 	int temp_y = bounds.size.h - GRAPH_LAYERS_H;
+ 	s_temp_layer = temp_layer_create(GRect(0, temp_y, w, GRAPH_LAYERS_H));
++	temp_layer_set_range(s_temp_layer, settings_get()->temp_range_hours);
+ 	layer_add_child(root, temp_layer_get_layer(s_temp_layer));
+ 
+ 	// Seed time display immediately
 diff --git a/src/c/modules/settings.c b/src/c/modules/settings.c
-index f180292..69baa9d 100644
+index f180292..f36f924 100644
 --- a/src/c/modules/settings.c
 +++ b/src/c/modules/settings.c
-@@ -17,7 +17,7 @@ static Settings s_settings;
+@@ -17,12 +17,13 @@ static Settings s_settings;
  // struct to maintain compatibility with old persisted data.
  static const Settings s_defaults = {
      .temp_unit_celsius = true,
@@ -11,8 +51,40 @@ index f180292..69baa9d 100644
      .accent_color = {.argb = 0b11111111}, // GColorWhite
      .battery_display = BATTERY_DISPLAY_ICON,
      .show_timezone = true,
+     .show_ampm = true,
+     .fetch_interval_min = 30,
++    .temp_range_hours = 24,
+ };
+ 
+ void settings_init(void) {
+@@ -91,5 +92,13 @@ void settings_apply_from_message(DictionaryIterator *iter) {
+ 		}
+ 	}
+ 
++	t = dict_find(iter, MESSAGE_KEY_SETTING_TEMP_RANGE);
++	if (t) {
++		int range = (int)t->value->int32;
++		if (range == 12 || range == 24) {
++			s_settings.temp_range_hours = (uint8_t)range;
++		}
++	}
++
+ 	settings_save();
+ }
+diff --git a/src/c/modules/settings.h b/src/c/modules/settings.h
+index 1630ba0..8bcec92 100644
+--- a/src/c/modules/settings.h
++++ b/src/c/modules/settings.h
+@@ -23,6 +23,7 @@ typedef struct {
+ 	bool show_timezone;
+ 	bool show_ampm;
+ 	uint8_t fetch_interval_min;
++	uint8_t temp_range_hours; // temperature graph span: 12 or 24
+ } Settings;
+ 
+ void settings_init(void);
 diff --git a/src/c/ui/temp_layer.c b/src/c/ui/temp_layer.c
-index 64db279..db06930 100644
+index 64db279..d3bb6a0 100644
 --- a/src/c/ui/temp_layer.c
 +++ b/src/c/ui/temp_layer.c
 @@ -13,6 +13,21 @@
@@ -37,7 +109,47 @@ index 64db279..db06930 100644
  struct TempLayer {
  	Layer *layer;
  	int16_t current;
-@@ -112,8 +127,10 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -22,6 +37,7 @@ struct TempLayer {
+ 	int8_t apparent_hourly[GRAPH_HOURS];
+ 	uint8_t current_hour;
+ 	uint8_t hours_remaining;
++	uint8_t range_hours; // 12 or 24
+ 	bool celsius;
+ };
+ 
+@@ -31,6 +47,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 	int lh = bounds.size.h;
+ 	int graph_x = GRAPH_OFFSET_X;
+ 	int graph_w = bounds.size.w - graph_x;
++	int range = tl->range_hours; // hours spanned by the sparkline and axis
+ 
+ #if PBL_DISPLAY_HEIGHT >= 228
+ 	GFont font_sm = fonts_get_system_font(FONT_KEY_GOTHIC_18);
+@@ -85,20 +102,20 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 	// two lines share the same y-scale.
+ 	int16_t pts[25];
+ 	pts[0] = tl->current;
+-	for (int i = 0; i < GRAPH_HOURS; i++)
++	for (int i = 0; i < range; i++)
+ 		pts[i + 1] = tl->hourly[i];
+ 
+ 	int16_t apt[25];
+ 	apt[0] = tl->apparent_hourly[0]; // no separate "current apparent"; use
+ 	                                 // first hourly
+-	for (int i = 0; i < GRAPH_HOURS; i++)
++	for (int i = 0; i < range; i++)
+ 		apt[i + 1] = tl->apparent_hourly[i];
+ 
+ 	// Bound the scale to the actual values in the two 24-hour arrays so the
+ 	// lines always fill the available vertical space correctly.
+ 	int16_t t_min = pts[0] < apt[0] ? pts[0] : apt[0];
+ 	int16_t t_max = pts[0] > apt[0] ? pts[0] : apt[0];
+-	for (int i = 1; i < 25; i++) {
++	for (int i = 1; i <= range; i++) {
+ 		if (pts[i] < t_min)
+ 			t_min = pts[i];
+ 		if (pts[i] > t_max)
+@@ -112,23 +129,25 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  	if (t_range < 1)
  		t_range = 1;
  
@@ -49,7 +161,14 @@ index 64db279..db06930 100644
  
  	// Pre-compute pixel positions for both lines
  	int spx[25], spy[25];
-@@ -126,9 +143,9 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 	int apx[25], apy[25];
+-	for (int i = 0; i < 25; i++) {
+-		spx[i] = graph_x + i * graph_w / 24;
++	for (int i = 0; i <= range; i++) {
++		spx[i] = graph_x + i * graph_w / range;
+ 		spy[i] = pad + graph_h - ((pts[i] - t_min) * graph_h / t_range);
+ 		apx[i] = spx[i];
+ 		apy[i] = pad + graph_h - ((apt[i] - t_min) * graph_h / t_range);
  	}
  
  #if defined(PBL_COLOR)
@@ -61,17 +180,79 @@ index 64db279..db06930 100644
  //   Pass 2 — light-colored 1px line drawn on top at the actual-temp position.
  //   Pass 3 — white 1px line for apparent temperature over everything.
  //
-@@ -235,7 +252,59 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -159,7 +178,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 	              : GColorRed)
+ 
+ 	// Pass 1: dark fills
+-	for (int i = 1; i <= (int)tl->hours_remaining && i < 25; i++) {
++	for (int i = 1; i <= (int)tl->hours_remaining && i <= range; i++) {
+ 		int avg = ((int)pts[i - 1] + (int)pts[i]) / 2;
+ 		graphics_context_set_fill_color(ctx, DARK_TEMP_COLOR(TEMP_TO_F(avg)));
+ 		int x0 = spx[i - 1], y0 = spy[i - 1], x1 = spx[i], y1 = spy[i];
+@@ -180,7 +199,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 
+ 	// Pass 2: light-colored actual-temp line on top of the fill
+ 	graphics_context_set_stroke_width(ctx, 1);
+-	for (int i = 1; i <= (int)tl->hours_remaining && i < 25; i++) {
++	for (int i = 1; i <= (int)tl->hours_remaining && i <= range; i++) {
+ 		int avg = ((int)pts[i - 1] + (int)pts[i]) / 2;
+ 		graphics_context_set_stroke_color(ctx,
+ 		                                  LIGHT_TEMP_COLOR(TEMP_TO_F(avg)));
+@@ -190,7 +209,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 
+ 	// Pass 3: white apparent-temp line over everything
+ 	graphics_context_set_stroke_color(ctx, GColorWhite);
+-	for (int i = 1; i <= (int)tl->hours_remaining && i < 25; i++) {
++	for (int i = 1; i <= (int)tl->hours_remaining && i <= range; i++) {
+ 		graphics_draw_line(ctx, GPoint(apx[i - 1], apy[i - 1]),
+ 		                   GPoint(apx[i], apy[i]));
+ 	}
+@@ -202,14 +221,14 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 	// B&W: white actual-temp line + dotted apparent-temp line.
+ 	graphics_context_set_stroke_width(ctx, 1);
+ 	graphics_context_set_stroke_color(ctx, GColorWhite);
+-	for (int i = 1; i <= (int)tl->hours_remaining && i < 25; i++) {
++	for (int i = 1; i <= (int)tl->hours_remaining && i <= range; i++) {
+ 		graphics_draw_line(ctx, GPoint(spx[i - 1], spy[i - 1]),
+ 		                   GPoint(spx[i], spy[i]));
+ 	}
+ 
+ 	// Pebble's b&w path does not offer dashed strokes, so render the apparent
+ 	// temperature as sampled pixels along each segment instead.
+-	for (int i = 1; i <= (int)tl->hours_remaining && i < 25; i++) {
++	for (int i = 1; i <= (int)tl->hours_remaining && i <= range; i++) {
+ 		graph_draw_dotted_line(ctx, GPoint(apx[i - 1], apy[i - 1]),
+ 		                       GPoint(apx[i], apy[i]), 3);
+ 	}
+@@ -220,7 +239,6 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 	// sparkline fill (contrasts against color), white when it falls in the
+ 	// empty region or there is no sparkline at all.
+ 	{
+-		int bar_w = graph_w / GRAPH_HOURS;
+ 		int offsets[2] = {
+ 		    (12 - (int)tl->current_hour + 24) % 24, // noon
+ 		    (24 - (int)tl->current_hour) % 24,      // midnight
+@@ -228,14 +246,69 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 		graphics_context_set_stroke_width(ctx, 1);
+ 		for (int i = 0; i < 2; i++) {
+ 			int off = offsets[i];
+-			if (off == 0)
++			if (off == 0 || off >= range)
+ 				continue;
+ 			bool in_sparkline = (off < (int)tl->hours_remaining);
+ 			graphics_context_set_stroke_color(
  			    ctx, PBL_IF_COLOR_ELSE(in_sparkline ? GColorBlack : GColorWhite,
  			                           GColorWhite));
- 			int tx = graph_x + off * bar_w;
+-			int tx = graph_x + off * bar_w;
 -			graphics_draw_line(ctx, GPoint(tx, lh - 4), GPoint(tx, lh - 1));
++			int tx = graph_x + off * graph_w / range;
 +			graphics_draw_line(ctx, GPoint(tx, plot_h - 4),
 +			                   GPoint(tx, plot_h - 1));
 +		}
 +	}
 +
-+	// Time axis: ticks every 3 hours, labels every 6 hours. Offset 0 is the
++	// Time axis: 24h range ticks every 3 hours and labels every 6; 12h range
++	// ticks every hour and labels every 3. Offset 0 is the
 +	// current hour at the left edge of the graph.
 +	{
 +		GFont axis_font = fonts_get_system_font(AXIS_FONT_KEY);
@@ -82,17 +263,19 @@ index 64db279..db06930 100644
 +		    ctx, PBL_IF_COLOR_ELSE(GColorLightGray, GColorWhite));
 +		graphics_context_set_text_color(
 +		    ctx, PBL_IF_COLOR_ELSE(GColorLightGray, GColorWhite));
-+		for (int off = 0; off <= GRAPH_HOURS; off++) {
++		int tick_step = range == 12 ? 1 : 3;
++		int label_step = range == 12 ? 3 : 6;
++		for (int off = 0; off <= range; off++) {
 +			int hour = ((int)tl->current_hour + off) % 24;
-+			if (hour % 3 != 0)
++			if (hour % tick_step != 0)
 +				continue;
-+			int tx = graph_x + off * graph_w / GRAPH_HOURS;
-+			bool labeled = (hour % 6 == 0);
++			int tx = graph_x + off * graph_w / range;
++			bool labeled = (hour % label_step == 0);
 +			int tick_h = labeled ? AXIS_TICK_H + 1 : AXIS_TICK_H;
 +			if (tx > graph_x && tx < right)
 +				graphics_draw_line(ctx, GPoint(tx, plot_h),
 +				                   GPoint(tx, plot_h + tick_h - 1));
-+			if (!labeled || off == GRAPH_HOURS)
++			if (!labeled || off == range)
 +				continue;
 +
 +			static char label[4];
@@ -122,6 +305,38 @@ index 64db279..db06930 100644
  		}
  	}
  }
+@@ -249,6 +322,7 @@ TempLayer *temp_layer_create(GRect frame) {
+ 	tl->low = 0;
+ 	tl->current_hour = 0;
+ 	tl->hours_remaining = GRAPH_HOURS;
++	tl->range_hours = GRAPH_HOURS;
+ 	tl->celsius = false;
+ 	memset(tl->hourly, 0, sizeof(tl->hourly));
+ 	memset(tl->apparent_hourly, 0, sizeof(tl->apparent_hourly));
+@@ -301,3 +375,10 @@ void temp_layer_set_current_hour(TempLayer *layer, uint8_t current_hour,
+ 	layer->hours_remaining = hours_remaining;
+ 	layer_mark_dirty(layer->layer);
+ }
++
++void temp_layer_set_range(TempLayer *layer, uint8_t range_hours) {
++	if (!layer)
++		return;
++	layer->range_hours = (range_hours == 12) ? 12 : GRAPH_HOURS;
++	layer_mark_dirty(layer->layer);
++}
+diff --git a/src/c/ui/temp_layer.h b/src/c/ui/temp_layer.h
+index adefc5a..f233f5c 100644
+--- a/src/c/ui/temp_layer.h
++++ b/src/c/ui/temp_layer.h
+@@ -19,6 +19,8 @@ void temp_layer_set_data(TempLayer *layer, int16_t current, int16_t high,
+                          int16_t low, const int8_t hourly[24],
+                          const int8_t apparent_hourly[24], uint8_t current_hour,
+                          uint8_t hours_remaining);
++// Number of hours (12 or 24) the sparkline and time axis span.
++void temp_layer_set_range(TempLayer *layer, uint8_t range_hours);
+ // No-op kept for call-site compatibility; unit is baked into values by pkjs.
+ void temp_layer_set_unit(TempLayer *layer, bool celsius);
+ // Update only the current hour (tick positions) and hours_remaining without
 diff --git a/src/c/ui/time_layer.c b/src/c/ui/time_layer.c
 index 30df259..cf26356 100644
 --- a/src/c/ui/time_layer.c
@@ -383,10 +598,27 @@ index c18168b..8fd7149 100644
  typedef struct TimeLayer TimeLayer;
  
 diff --git a/src/pkjs/config.js b/src/pkjs/config.js
-index aeec485..081ba25 100644
+index aeec485..64f9c7c 100644
 --- a/src/pkjs/config.js
 +++ b/src/pkjs/config.js
-@@ -65,11 +65,11 @@ module.exports = [
+@@ -48,6 +48,16 @@ module.exports = [
+ 					{ 'label': 'Every 60 minutes', 'value': 60 },
+ 				],
+ 			},
++			{
++				'type': 'select',
++				'messageKey': 'SETTING_TEMP_RANGE',
++				'label': 'Temperature Graph Range',
++				'defaultValue': 24,
++				'options': [
++					{ 'label': '24 hours', 'value': 24 },
++					{ 'label': '12 hours', 'value': 12 },
++				],
++			},
+ 		],
+ 	},
+ 	{
+@@ -65,11 +75,11 @@ module.exports = [
  				'type': 'select',
  				'messageKey': 'SETTING_DATE_FORMAT',
  				'label': 'Date Format',
@@ -402,3 +634,19 @@ index aeec485..081ba25 100644
  					{ 'label': '1/15/2026', 'value': '%m/%d/%Y' },
  					{ 'label': '15/1/2026', 'value': '%d/%m/%Y' },
  					{ 'label': '15 Jan 2026', 'value': '%d %b %Y' },
+diff --git a/src/pkjs/index.js b/src/pkjs/index.js
+index da75343..fcc7c24 100644
+--- a/src/pkjs/index.js
++++ b/src/pkjs/index.js
+@@ -1019,6 +1019,11 @@ Pebble.addEventListener('webviewclosed', function (e) {
+ 		dict['SETTING_FETCH_INTERVAL'] = fetchInterval;
+ 	}
+ 
++	var tempRange = extractInt(rawSettings['SETTING_TEMP_RANGE']);
++	if (tempRange === 12 || tempRange === 24) {
++		dict['SETTING_TEMP_RANGE'] = tempRange;
++	}
++
+ 	var showTimezone = extractBool(rawSettings['SETTING_SHOW_TIMEZONE']);
+ 	if (showTimezone !== null) dict['SETTING_SHOW_TIMEZONE'] = showTimezone;
+ 
