@@ -20,5 +20,5 @@ pebble build
 
 ## スクリーンショット
 - 時刻表示を大きく(basalt/diorite/flint/aplite: LECO_42(emery は LECO_60)を描画後に 4/3〜3/2 倍へピクセル拡大。システムフォントは42が上限のため)。タイムゾーン/都市名/AM-PM は時刻行から外し、GOTHIC_09 の小フォントで1行にまとめた
-- 設定ページに「Temperature Graph Range」(24 hours / 12 hours)を追加。気温グラフと時刻目盛りのみが対象(12時間表示は1時間ごとの目盛り、3時間ごとのラベル)。雲量・降水確率のグラフは24時間のまま
+- 設定ページに「Graph Range」(24 hours / 12 hours)を追加。気温・雲量・降水確率・天気イベント・昼夜ラインの全グラフが連動して12時間表示になる(12時間表示は気温グラフの目盛りが1時間ごと、ラベルが3時間ごと)
 `screenshots/` に変更前(before_basalt)と変更後(basalt / basalt 12h / diorite / emery)を同梱。

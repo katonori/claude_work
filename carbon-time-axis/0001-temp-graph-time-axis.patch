@@ -11,30 +11,50 @@ index f85ccac..5ab7d4c 100644
        "SETTING_DATE_FORMAT",
        "SETTING_BATTERY_DISPLAY",
 diff --git a/src/c/main.c b/src/c/main.c
-index 327dece..f3279af 100644
+index 327dece..3d36899 100644
 --- a/src/c/main.c
 +++ b/src/c/main.c
-@@ -230,6 +230,7 @@ static void prv_push_weather_to_layers(struct tm *now) {
+@@ -99,6 +99,19 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
+ #endif
+ }
+ 
++/**
++ * Apply the graph range setting (12h / 24h) to every time-based graph layer.
++ * The layers read the shared range at draw time, so they only need a redraw.
++ */
++static void prv_apply_graph_range(void) {
++	graph_set_range(settings_get()->temp_range_hours);
++	layer_mark_dirty(daylight_layer_get_layer(s_daylight_layer));
++	layer_mark_dirty(cloud_layer_get_layer(s_cloud_layer));
++	layer_mark_dirty(precip_layer_get_layer(s_precip_layer));
++	layer_mark_dirty(event_layer_get_layer(s_event_layer));
++	layer_mark_dirty(temp_layer_get_layer(s_temp_layer));
++}
++
+ /**
+  * Push current weather state to all graph layers.
+  *
+@@ -230,6 +243,7 @@ static void prv_push_weather_to_layers(struct tm *now) {
  	                                    data_age_sec >= stale_threshold_sec ||
  	                                    hours_remaining == 0);
  	temp_layer_set_unit(s_temp_layer, settings_get()->temp_unit_celsius);
-+	temp_layer_set_range(s_temp_layer, settings_get()->temp_range_hours);
++	prv_apply_graph_range();
  	temp_layer_set_data(s_temp_layer, display_temp, s_weather.high_temp,
  	                    s_weather.low_temp, temp_view, appar_view, current_hour,
  	                    hours_remaining);
-@@ -247,6 +248,7 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
+@@ -247,6 +261,7 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
  	// Check for settings changes first
  	settings_apply_from_message(iter);
  	temp_layer_set_unit(s_temp_layer, settings_get()->temp_unit_celsius);
-+	temp_layer_set_range(s_temp_layer, settings_get()->temp_range_hours);
++	prv_apply_graph_range();
  	icon_bar_layer_set_battery_display(s_icon_bar_layer,
  	                                   settings_get()->battery_display);
  	// Apply date format immediately rather than waiting for the next tick.
-@@ -439,6 +441,7 @@ static void prv_window_load(Window *window) {
+@@ -439,6 +454,7 @@ static void prv_window_load(Window *window) {
  	// bottom
  	int temp_y = bounds.size.h - GRAPH_LAYERS_H;
  	s_temp_layer = temp_layer_create(GRect(0, temp_y, w, GRAPH_LAYERS_H));
-+	temp_layer_set_range(s_temp_layer, settings_get()->temp_range_hours);
++	prv_apply_graph_range();
  	layer_add_child(root, temp_layer_get_layer(s_temp_layer));
  
  	// Seed time display immediately
@@ -83,8 +103,185 @@ index 1630ba0..8bcec92 100644
  } Settings;
  
  void settings_init(void);
+diff --git a/src/c/ui/cloud_layer.c b/src/c/ui/cloud_layer.c
+index c279047..3f0a05b 100644
+--- a/src/c/ui/cloud_layer.c
++++ b/src/c/ui/cloud_layer.c
+@@ -33,10 +33,11 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 	int graph_x = GRAPH_OFFSET_X;
+ 	int graph_w = bounds.size.w - graph_x;
+ 	int cy = bounds.size.h / 2;
++	int range = graph_get_range();
+ 
+ 	graphics_context_set_antialiased(ctx, false);
+ 
+-	for (int i = GRAPH_HOURS - 1; i >= 0; i--) {
++	for (int i = range - 1; i >= 0; i--) {
+ 		if (cl->cover[i] < CLEAR_THRESHOLD)
+ 			continue;
+ 
+@@ -57,7 +58,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ #endif
+ 
+ 		// Draw later hours first so sooner clouds overlap them.
+-		int cx = graph_x + (long)(i * 2 + 1) * graph_w / (GRAPH_HOURS * 2);
++		int cx = graph_x + (long)(i * 2 + 1) * graph_w / (range * 2);
+ 		int r;
+ 		if (cl->cover[i] < 40) {
+ 			r = 2;
+diff --git a/src/c/ui/daylight_layer.c b/src/c/ui/daylight_layer.c
+index e46ba46..c89ee5a 100644
+--- a/src/c/ui/daylight_layer.c
++++ b/src/c/ui/daylight_layer.c
+@@ -75,7 +75,9 @@ static void prv_draw_col_marker(GContext *ctx, int col, int phase, int graph_x,
+ 	const int r = 3;
+ 	int xs[2], n = 1;
+ 	xs[0] = graph_x + col * bar_w;
+-	if (col == 0) {
++	// Marker at the left edge also peeks in from the right edge (+24h wrap);
++	// that only lies on screen when the graph spans a full day.
++	if (col == 0 && graph_get_range() == GRAPH_HOURS) {
+ 		xs[1] = layer_w;
+ 		n = 2;
+ 	}
+@@ -133,7 +135,8 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 	GRect bounds = layer_get_bounds(layer);
+ 	int graph_x = GRAPH_OFFSET_X;
+ 	int graph_w = bounds.size.w - graph_x;
+-	int bar_w = graph_w / GRAPH_HOURS;
++	int range = graph_get_range();
++	int bar_w = graph_w / range;
+ 	int lh = bounds.size.h;
+ 	int line_y = lh / 2;
+ 
+diff --git a/src/c/ui/event_layer.c b/src/c/ui/event_layer.c
+index 0ab3617..5ab80ef 100644
+--- a/src/c/ui/event_layer.c
++++ b/src/c/ui/event_layer.c
+@@ -66,7 +66,8 @@ static int prv_find_spans(const uint8_t hourly_code[24],
+                           uint8_t hours_remaining, EventSpan spans[24]) {
+ 	int span_count = 0;
+ 	int i = 0;
+-	while (i < (int)hours_remaining && i < GRAPH_HOURS) {
++	int range = graph_get_range();
++	while (i < (int)hours_remaining && i < range) {
+ 		GColor color;
+ 		EventKind kind;
+ 		const char *icon = prv_event_icon(hourly_code[i], &color, &kind);
+@@ -77,7 +78,7 @@ static int prv_find_spans(const uint8_t hourly_code[24],
+ 
+ 		// Group consecutive hours that map to the same visual event type.
+ 		int start = i;
+-		while (i < (int)hours_remaining && i < GRAPH_HOURS) {
++		while (i < (int)hours_remaining && i < range) {
+ 			GColor next_color;
+ 			EventKind next_kind;
+ 			if (!prv_event_icon(hourly_code[i], &next_color, &next_kind) ||
+@@ -97,9 +98,9 @@ static int prv_find_spans(const uint8_t hourly_code[24],
+ 
+ 	// Only append a missing span when some valid data exists — total absence
+ 	// is indicated by the icon_bar disconnect icon instead.
+-	if ((int)hours_remaining > 0 && (int)hours_remaining < GRAPH_HOURS) {
++	if ((int)hours_remaining > 0 && (int)hours_remaining < range) {
+ 		spans[span_count].start_hour = (int)hours_remaining;
+-		spans[span_count].end_hour = GRAPH_HOURS - 1;
++		spans[span_count].end_hour = range - 1;
+ 		spans[span_count].kind = EVENT_KIND_MISSING;
+ 		spans[span_count].color = GColorRed;
+ 		spans[span_count].icon = ICON_CONNECTION_SIGNAL__OFF;
+@@ -118,6 +119,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 	int graph_x = GRAPH_OFFSET_X;
+ 	int graph_w = bounds.size.w - graph_x;
+ 	int layer_h = bounds.size.h;
++	int range = graph_get_range();
+ 
+ 	// Find all event spans in the hourly data
+ 	EventSpan spans[GRAPH_HOURS];
+@@ -130,11 +132,11 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 		EventSpan *span = &spans[s];
+ 
+ 		// Calculate x-position for the center of each hour
+-		// Formula: graph_x + (hour * 2 + 1) / (GRAPH_HOURS * 2) * graph_w
+-		int x_start = graph_x + (long)(span->start_hour * 2 + 1) * graph_w /
+-		                            (GRAPH_HOURS * 2);
+-		int x_end = graph_x + (long)(span->end_hour * 2 + 1) * graph_w /
+-		                          (GRAPH_HOURS * 2);
++		// Formula: graph_x + (hour * 2 + 1) / (range * 2) * graph_w
++		int x_start =
++		    graph_x + (long)(span->start_hour * 2 + 1) * graph_w / (range * 2);
++		int x_end =
++		    graph_x + (long)(span->end_hour * 2 + 1) * graph_w / (range * 2);
+ 
+ 		// Center vertically in the layer
+ 		int center_y = layer_h / 2;
+diff --git a/src/c/ui/graph_common.c b/src/c/ui/graph_common.c
+new file mode 100644
+index 0000000..3ee83a7
+--- /dev/null
++++ b/src/c/ui/graph_common.c
+@@ -0,0 +1,18 @@
++/**
++ * Graph common utilities
++ *
++ * @author    Cory Hughart <cory@coryhughart.com>
++ * @copyright 2026 Cory Hughart
++ * @license   https://www.gnu.org/licenses/gpl-3.0.html GPL-3.0-or-later
++ * @link      https://cr0ybot.com/project/pebble-watchface-carbon
++ */
++
++#include "graph_common.h"
++
++static uint8_t s_range_hours = GRAPH_HOURS;
++
++uint8_t graph_get_range(void) { return s_range_hours; }
++
++void graph_set_range(uint8_t range_hours) {
++	s_range_hours = (range_hours == 12) ? 12 : GRAPH_HOURS;
++}
+diff --git a/src/c/ui/graph_common.h b/src/c/ui/graph_common.h
+index c587fc8..1d59bf4 100644
+--- a/src/c/ui/graph_common.h
++++ b/src/c/ui/graph_common.h
+@@ -23,6 +23,12 @@
+ // Number of hourly slots displayed across all graph layers
+ #define GRAPH_HOURS 24
+ 
++// Number of hours (12 or 24) the time-based graph layers span. Shared by all
++// layers (daylight, cloud, precip, event, temp) so they stay aligned. Layers
++// read it at draw time; call graph_set_range() then mark the layers dirty.
++uint8_t graph_get_range(void);
++void graph_set_range(uint8_t range_hours);
++
+ // Draw a dotted line by sampling pixels along the segment. This is mainly for
+ // monochrome screens where dashed strokes are not available.
+ static inline void graph_draw_dotted_line(GContext *ctx, GPoint start,
+diff --git a/src/c/ui/precip_layer.c b/src/c/ui/precip_layer.c
+index 2608785..44d445d 100644
+--- a/src/c/ui/precip_layer.c
++++ b/src/c/ui/precip_layer.c
+@@ -66,6 +66,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 	int graph_x = GRAPH_OFFSET_X;
+ 	int graph_w = bounds.size.w - graph_x;
+ 	int layer_h = bounds.size.h;
++	int range = graph_get_range();
+ 
+ 	// Precipitation bars — proportional x so bars fill to the right edge
+ 	// Color platforms use WMO-category colors:
+@@ -77,9 +78,9 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 	//   storm        → bright blue (GColorVividCerulean) + lightning bolt
+ 	//   heavy storm  → bright blue (GColorVividCerulean) + lightning bolt
+ 	//   hail storm   → white       (GColorWhite) + lightning bolt
+-	for (int i = 0; i < GRAPH_HOURS; i++) {
+-		int x0 = graph_x + (long)i * graph_w / GRAPH_HOURS;
+-		int x1 = graph_x + (long)(i + 1) * graph_w / GRAPH_HOURS;
++	for (int i = 0; i < range; i++) {
++		int x0 = graph_x + (long)i * graph_w / range;
++		int x1 = graph_x + (long)(i + 1) * graph_w / range;
+ 		int bar_w = x1 - x0 - 1;
+ 		if (bar_w < 1)
+ 			bar_w = 1;
 diff --git a/src/c/ui/temp_layer.c b/src/c/ui/temp_layer.c
-index 64db279..d3bb6a0 100644
+index 64db279..3da5013 100644
 --- a/src/c/ui/temp_layer.c
 +++ b/src/c/ui/temp_layer.c
 @@ -13,6 +13,21 @@
@@ -109,23 +306,15 @@ index 64db279..d3bb6a0 100644
  struct TempLayer {
  	Layer *layer;
  	int16_t current;
-@@ -22,6 +37,7 @@ struct TempLayer {
- 	int8_t apparent_hourly[GRAPH_HOURS];
- 	uint8_t current_hour;
- 	uint8_t hours_remaining;
-+	uint8_t range_hours; // 12 or 24
- 	bool celsius;
- };
- 
-@@ -31,6 +47,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -31,6 +46,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  	int lh = bounds.size.h;
  	int graph_x = GRAPH_OFFSET_X;
  	int graph_w = bounds.size.w - graph_x;
-+	int range = tl->range_hours; // hours spanned by the sparkline and axis
++	int range = graph_get_range(); // hours spanned by the sparkline and axis
  
  #if PBL_DISPLAY_HEIGHT >= 228
  	GFont font_sm = fonts_get_system_font(FONT_KEY_GOTHIC_18);
-@@ -85,20 +102,20 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -85,20 +101,20 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  	// two lines share the same y-scale.
  	int16_t pts[25];
  	pts[0] = tl->current;
@@ -149,7 +338,7 @@ index 64db279..d3bb6a0 100644
  		if (pts[i] < t_min)
  			t_min = pts[i];
  		if (pts[i] > t_max)
-@@ -112,23 +129,25 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -112,23 +128,25 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  	if (t_range < 1)
  		t_range = 1;
  
@@ -180,7 +369,7 @@ index 64db279..d3bb6a0 100644
  //   Pass 2 — light-colored 1px line drawn on top at the actual-temp position.
  //   Pass 3 — white 1px line for apparent temperature over everything.
  //
-@@ -159,7 +178,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -159,7 +177,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  	              : GColorRed)
  
  	// Pass 1: dark fills
@@ -189,7 +378,7 @@ index 64db279..d3bb6a0 100644
  		int avg = ((int)pts[i - 1] + (int)pts[i]) / 2;
  		graphics_context_set_fill_color(ctx, DARK_TEMP_COLOR(TEMP_TO_F(avg)));
  		int x0 = spx[i - 1], y0 = spy[i - 1], x1 = spx[i], y1 = spy[i];
-@@ -180,7 +199,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -180,7 +198,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  
  	// Pass 2: light-colored actual-temp line on top of the fill
  	graphics_context_set_stroke_width(ctx, 1);
@@ -198,7 +387,7 @@ index 64db279..d3bb6a0 100644
  		int avg = ((int)pts[i - 1] + (int)pts[i]) / 2;
  		graphics_context_set_stroke_color(ctx,
  		                                  LIGHT_TEMP_COLOR(TEMP_TO_F(avg)));
-@@ -190,7 +209,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -190,7 +208,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  
  	// Pass 3: white apparent-temp line over everything
  	graphics_context_set_stroke_color(ctx, GColorWhite);
@@ -207,7 +396,7 @@ index 64db279..d3bb6a0 100644
  		graphics_draw_line(ctx, GPoint(apx[i - 1], apy[i - 1]),
  		                   GPoint(apx[i], apy[i]));
  	}
-@@ -202,14 +221,14 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -202,14 +220,14 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  	// B&W: white actual-temp line + dotted apparent-temp line.
  	graphics_context_set_stroke_width(ctx, 1);
  	graphics_context_set_stroke_color(ctx, GColorWhite);
@@ -224,7 +413,7 @@ index 64db279..d3bb6a0 100644
  		graph_draw_dotted_line(ctx, GPoint(apx[i - 1], apy[i - 1]),
  		                       GPoint(apx[i], apy[i]), 3);
  	}
-@@ -220,7 +239,6 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -220,7 +238,6 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  	// sparkline fill (contrasts against color), white when it falls in the
  	// empty region or there is no sparkline at all.
  	{
@@ -232,7 +421,7 @@ index 64db279..d3bb6a0 100644
  		int offsets[2] = {
  		    (12 - (int)tl->current_hour + 24) % 24, // noon
  		    (24 - (int)tl->current_hour) % 24,      // midnight
-@@ -228,14 +246,69 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -228,14 +245,69 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  		graphics_context_set_stroke_width(ctx, 1);
  		for (int i = 0; i < 2; i++) {
  			int off = offsets[i];
@@ -305,38 +494,6 @@ index 64db279..d3bb6a0 100644
  		}
  	}
  }
-@@ -249,6 +322,7 @@ TempLayer *temp_layer_create(GRect frame) {
- 	tl->low = 0;
- 	tl->current_hour = 0;
- 	tl->hours_remaining = GRAPH_HOURS;
-+	tl->range_hours = GRAPH_HOURS;
- 	tl->celsius = false;
- 	memset(tl->hourly, 0, sizeof(tl->hourly));
- 	memset(tl->apparent_hourly, 0, sizeof(tl->apparent_hourly));
-@@ -301,3 +375,10 @@ void temp_layer_set_current_hour(TempLayer *layer, uint8_t current_hour,
- 	layer->hours_remaining = hours_remaining;
- 	layer_mark_dirty(layer->layer);
- }
-+
-+void temp_layer_set_range(TempLayer *layer, uint8_t range_hours) {
-+	if (!layer)
-+		return;
-+	layer->range_hours = (range_hours == 12) ? 12 : GRAPH_HOURS;
-+	layer_mark_dirty(layer->layer);
-+}
-diff --git a/src/c/ui/temp_layer.h b/src/c/ui/temp_layer.h
-index adefc5a..f233f5c 100644
---- a/src/c/ui/temp_layer.h
-+++ b/src/c/ui/temp_layer.h
-@@ -19,6 +19,8 @@ void temp_layer_set_data(TempLayer *layer, int16_t current, int16_t high,
-                          int16_t low, const int8_t hourly[24],
-                          const int8_t apparent_hourly[24], uint8_t current_hour,
-                          uint8_t hours_remaining);
-+// Number of hours (12 or 24) the sparkline and time axis span.
-+void temp_layer_set_range(TempLayer *layer, uint8_t range_hours);
- // No-op kept for call-site compatibility; unit is baked into values by pkjs.
- void temp_layer_set_unit(TempLayer *layer, bool celsius);
- // Update only the current hour (tick positions) and hours_remaining without
 diff --git a/src/c/ui/time_layer.c b/src/c/ui/time_layer.c
 index 30df259..cf26356 100644
 --- a/src/c/ui/time_layer.c
@@ -598,17 +755,18 @@ index c18168b..8fd7149 100644
  typedef struct TimeLayer TimeLayer;
  
 diff --git a/src/pkjs/config.js b/src/pkjs/config.js
-index aeec485..64f9c7c 100644
+index aeec485..5a84fb2 100644
 --- a/src/pkjs/config.js
 +++ b/src/pkjs/config.js
-@@ -48,6 +48,16 @@ module.exports = [
+@@ -48,6 +48,17 @@ module.exports = [
  					{ 'label': 'Every 60 minutes', 'value': 60 },
  				],
  			},
 +			{
 +				'type': 'select',
 +				'messageKey': 'SETTING_TEMP_RANGE',
-+				'label': 'Temperature Graph Range',
++				'label': 'Graph Range',
++				'description': 'Time span of the temperature, cloud, precipitation and daylight graphs.',
 +				'defaultValue': 24,
 +				'options': [
 +					{ 'label': '24 hours', 'value': 24 },
@@ -618,7 +776,7 @@ index aeec485..64f9c7c 100644
  		],
  	},
  	{
-@@ -65,11 +75,11 @@ module.exports = [
+@@ -65,11 +76,11 @@ module.exports = [
  				'type': 'select',
  				'messageKey': 'SETTING_DATE_FORMAT',
  				'label': 'Date Format',
