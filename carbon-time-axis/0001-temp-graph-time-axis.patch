@@ -1,20 +1,37 @@
 diff --git a/package.json b/package.json
-index f85ccac..5ab7d4c 100644
+index f85ccac..da17332 100644
 --- a/package.json
 +++ b/package.json
-@@ -46,6 +46,7 @@
+@@ -46,6 +46,8 @@
        "CITY_NAME",
        "SETTING_TEMP_UNIT",
        "SETTING_FETCH_INTERVAL",
 +      "SETTING_TEMP_RANGE",
++      "SETTING_THEME",
        "SETTING_ACCENT_COLOR",
        "SETTING_DATE_FORMAT",
        "SETTING_BATTERY_DISPLAY",
 diff --git a/src/c/main.c b/src/c/main.c
-index 327dece..3d36899 100644
+index 327dece..862277d 100644
 --- a/src/c/main.c
 +++ b/src/c/main.c
-@@ -99,6 +99,19 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
+@@ -17,6 +17,7 @@
+ #include "ui/icon_bar_layer.h"
+ #include "ui/precip_layer.h"
+ #include "ui/temp_layer.h"
++#include "ui/theme_layer.h"
+ #include "ui/time_layer.h"
+ #include <pebble.h>
+ #include <stddef.h>
+@@ -56,6 +57,7 @@ static PrecipLayer *s_precip_layer;
+ static EventLayer *s_event_layer;
+ static TimeLayer *s_time_layer;
+ static TempLayer *s_temp_layer;
++static ThemeLayer *s_theme_layer;
+ static IconBarLayer *s_icon_bar_layer;
+ 
+ static WeatherData s_weather;
+@@ -99,6 +101,19 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
  #endif
  }
  
@@ -34,7 +51,7 @@ index 327dece..3d36899 100644
  /**
   * Push current weather state to all graph layers.
   *
-@@ -230,6 +243,7 @@ static void prv_push_weather_to_layers(struct tm *now) {
+@@ -230,6 +245,7 @@ static void prv_push_weather_to_layers(struct tm *now) {
  	                                    data_age_sec >= stale_threshold_sec ||
  	                                    hours_remaining == 0);
  	temp_layer_set_unit(s_temp_layer, settings_get()->temp_unit_celsius);
@@ -42,27 +59,44 @@ index 327dece..3d36899 100644
  	temp_layer_set_data(s_temp_layer, display_temp, s_weather.high_temp,
  	                    s_weather.low_temp, temp_view, appar_view, current_hour,
  	                    hours_remaining);
-@@ -247,6 +261,7 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
+@@ -247,6 +263,8 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
  	// Check for settings changes first
  	settings_apply_from_message(iter);
  	temp_layer_set_unit(s_temp_layer, settings_get()->temp_unit_celsius);
 +	prv_apply_graph_range();
++	theme_layer_set_light(s_theme_layer, settings_get()->light_theme);
  	icon_bar_layer_set_battery_display(s_icon_bar_layer,
  	                                   settings_get()->battery_display);
  	// Apply date format immediately rather than waiting for the next tick.
-@@ -439,6 +454,7 @@ static void prv_window_load(Window *window) {
+@@ -439,8 +457,15 @@ static void prv_window_load(Window *window) {
  	// bottom
  	int temp_y = bounds.size.h - GRAPH_LAYERS_H;
  	s_temp_layer = temp_layer_create(GRect(0, temp_y, w, GRAPH_LAYERS_H));
 +	prv_apply_graph_range();
  	layer_add_child(root, temp_layer_get_layer(s_temp_layer));
  
++	// Theme overlay — must stay the topmost layer: it inverts the finished
++	// frame
++	s_theme_layer = theme_layer_create(GRect(0, 0, w, bounds.size.h));
++	layer_add_child(root, theme_layer_get_layer(s_theme_layer));
++	theme_layer_set_light(s_theme_layer, settings_get()->light_theme);
++
  	// Seed time display immediately
+ #if defined(DEMO_SCENARIO)
+ 	struct tm demo_now;
+@@ -468,6 +493,7 @@ static void prv_window_unload(Window *window) {
+ 	icon_bar_layer_destroy(s_icon_bar_layer);
+ 	time_layer_destroy(s_time_layer);
+ 	temp_layer_destroy(s_temp_layer);
++	theme_layer_destroy(s_theme_layer);
+ }
+ 
+ //
 diff --git a/src/c/modules/settings.c b/src/c/modules/settings.c
-index f180292..f36f924 100644
+index f180292..fd3eaf0 100644
 --- a/src/c/modules/settings.c
 +++ b/src/c/modules/settings.c
-@@ -17,12 +17,13 @@ static Settings s_settings;
+@@ -17,12 +17,14 @@ static Settings s_settings;
  // struct to maintain compatibility with old persisted data.
  static const Settings s_defaults = {
      .temp_unit_celsius = true,
@@ -74,10 +108,11 @@ index f180292..f36f924 100644
      .show_ampm = true,
      .fetch_interval_min = 30,
 +    .temp_range_hours = 24,
++    .light_theme = false,
  };
  
  void settings_init(void) {
-@@ -91,5 +92,13 @@ void settings_apply_from_message(DictionaryIterator *iter) {
+@@ -91,5 +93,17 @@ void settings_apply_from_message(DictionaryIterator *iter) {
  		}
  	}
  
@@ -89,17 +124,22 @@ index f180292..f36f924 100644
 +		}
 +	}
 +
++	t = dict_find(iter, MESSAGE_KEY_SETTING_THEME);
++	if (t)
++		s_settings.light_theme = (t->value->int32 == 1);
++
  	settings_save();
  }
 diff --git a/src/c/modules/settings.h b/src/c/modules/settings.h
-index 1630ba0..8bcec92 100644
+index 1630ba0..f95f14f 100644
 --- a/src/c/modules/settings.h
 +++ b/src/c/modules/settings.h
-@@ -23,6 +23,7 @@ typedef struct {
+@@ -23,6 +23,8 @@ typedef struct {
  	bool show_timezone;
  	bool show_ampm;
  	uint8_t fetch_interval_min;
 +	uint8_t temp_range_hours; // temperature graph span: 12 or 24
++	bool light_theme;         // black-on-white instead of white-on-black
  } Settings;
  
  void settings_init(void);
@@ -494,6 +534,132 @@ index 64db279..3da5013 100644
  		}
  	}
  }
+diff --git a/src/c/ui/theme_layer.c b/src/c/ui/theme_layer.c
+new file mode 100644
+index 0000000..d749eb8
+--- /dev/null
++++ b/src/c/ui/theme_layer.c
+@@ -0,0 +1,91 @@
++/**
++ * Theme layer
++ *
++ * @author    Cory Hughart <cory@coryhughart.com>
++ * @copyright 2026 Cory Hughart
++ * @license   https://www.gnu.org/licenses/gpl-3.0.html GPL-3.0-or-later
++ * @link      https://cr0ybot.com/project/pebble-watchface-carbon
++ */
++
++#include "theme_layer.h"
++#include <stdlib.h>
++
++struct ThemeLayer {
++	Layer *layer;
++	bool light;
++};
++
++// Invert the grayscale pixels of the layer's area in the frame buffer. Pebble
++// re-renders the whole layer tree for every redraw, so this runs on a freshly
++// drawn frame each time and never double-inverts.
++static void prv_update_proc(Layer *layer, GContext *ctx) {
++	ThemeLayer *tl = *(ThemeLayer **)layer_get_data(layer);
++	if (!tl->light)
++		return;
++
++	GRect bounds = layer_get_bounds(layer);
++	GPoint origin = layer_convert_point_to_screen(layer, GPointZero);
++	GBitmap *fb = graphics_capture_frame_buffer(ctx);
++	if (!fb)
++		return;
++	GBitmapFormat fmt = gbitmap_get_format(fb);
++
++	for (int y = 0; y < bounds.size.h; y++) {
++		GBitmapDataRowInfo row = gbitmap_get_data_row_info(fb, origin.y + y);
++		int x0 = origin.x > row.min_x ? origin.x : row.min_x;
++		int x1 = origin.x + bounds.size.w - 1;
++		if (x1 > row.max_x)
++			x1 = row.max_x;
++		if (x0 > x1)
++			continue;
++
++		if (fmt == GBitmapFormat1Bit) {
++			// 1 bit per pixel, LSB first: flip whole bytes (rows are
++			// byte-aligned and this layer covers the full width).
++			for (int b = x0 / 8; b <= x1 / 8; b++)
++				row.data[b] ^= 0xFF;
++		} else {
++			// 8-bit ARGB2222. Only gray pixels (r == g == b) are inverted;
++			// colored pixels are left alone.
++			for (int x = x0; x <= x1; x++) {
++				uint8_t px = row.data[x];
++				uint8_t r = (px >> 4) & 3;
++				if (r == ((px >> 2) & 3) && r == (px & 3)) {
++					uint8_t inv = 3 - r;
++					row.data[x] = (px & 0xC0) | (inv << 4) | (inv << 2) | inv;
++				}
++			}
++		}
++	}
++
++	graphics_release_frame_buffer(ctx, fb);
++}
++
++ThemeLayer *theme_layer_create(GRect frame) {
++	ThemeLayer *tl = malloc(sizeof(ThemeLayer));
++	if (!tl)
++		return NULL;
++	tl->light = false;
++	tl->layer = layer_create_with_data(frame, sizeof(ThemeLayer *));
++	*(ThemeLayer **)layer_get_data(tl->layer) = tl;
++	layer_set_update_proc(tl->layer, prv_update_proc);
++	return tl;
++}
++
++void theme_layer_destroy(ThemeLayer *layer) {
++	if (!layer)
++		return;
++	layer_destroy(layer->layer);
++	free(layer);
++}
++
++Layer *theme_layer_get_layer(ThemeLayer *layer) {
++	return layer ? layer->layer : NULL;
++}
++
++void theme_layer_set_light(ThemeLayer *layer, bool light) {
++	if (!layer)
++		return;
++	layer->light = light;
++	layer_mark_dirty(layer->layer);
++}
+diff --git a/src/c/ui/theme_layer.h b/src/c/ui/theme_layer.h
+new file mode 100644
+index 0000000..7936801
+--- /dev/null
++++ b/src/c/ui/theme_layer.h
+@@ -0,0 +1,23 @@
++/**
++ * Theme layer
++ *
++ * Full-screen overlay added on top of every other layer. In the light theme it
++ * inverts the grayscale pixels (white <-> black, light <-> dark gray) of the
++ * rendered frame, so the whole watchface turns into black-on-white while
++ * colored graph fills keep their color. In the dark theme it does nothing.
++ *
++ * @author    Cory Hughart <cory@coryhughart.com>
++ * @copyright 2026 Cory Hughart
++ * @license   https://www.gnu.org/licenses/gpl-3.0.html GPL-3.0-or-later
++ * @link      https://cr0ybot.com/project/pebble-watchface-carbon
++ */
++
++#pragma once
++#include <pebble.h>
++
++typedef struct ThemeLayer ThemeLayer;
++
++ThemeLayer *theme_layer_create(GRect frame);
++void theme_layer_destroy(ThemeLayer *layer);
++Layer *theme_layer_get_layer(ThemeLayer *layer);
++void theme_layer_set_light(ThemeLayer *layer, bool light);
 diff --git a/src/c/ui/time_layer.c b/src/c/ui/time_layer.c
 index 30df259..cf26356 100644
 --- a/src/c/ui/time_layer.c
@@ -755,7 +921,7 @@ index c18168b..8fd7149 100644
  typedef struct TimeLayer TimeLayer;
  
 diff --git a/src/pkjs/config.js b/src/pkjs/config.js
-index aeec485..5a84fb2 100644
+index aeec485..6fdcd50 100644
 --- a/src/pkjs/config.js
 +++ b/src/pkjs/config.js
 @@ -48,6 +48,17 @@ module.exports = [
@@ -776,7 +942,7 @@ index aeec485..5a84fb2 100644
  		],
  	},
  	{
-@@ -65,11 +76,11 @@ module.exports = [
+@@ -65,17 +76,28 @@ module.exports = [
  				'type': 'select',
  				'messageKey': 'SETTING_DATE_FORMAT',
  				'label': 'Date Format',
@@ -792,11 +958,28 @@ index aeec485..5a84fb2 100644
  					{ 'label': '1/15/2026', 'value': '%m/%d/%Y' },
  					{ 'label': '15/1/2026', 'value': '%d/%m/%Y' },
  					{ 'label': '15 Jan 2026', 'value': '%d %b %Y' },
+ 					{ 'label': '2026-01-15', 'value': '%Y-0%m-0%d' },
+ 				],
+ 			},
++			{
++				'type': 'select',
++				'messageKey': 'SETTING_THEME',
++				'label': 'Background',
++				'description': 'Dark: white on black. Light: black on white (colored graph fills keep their color).',
++				'defaultValue': 0,
++				'options': [
++					{ 'label': 'Dark (black)', 'value': 0 },
++					{ 'label': 'Light (white)', 'value': 1 },
++				],
++			},
+ 			{
+ 				'type': 'select',
+ 				'messageKey': 'SETTING_BATTERY_DISPLAY',
 diff --git a/src/pkjs/index.js b/src/pkjs/index.js
-index da75343..fcc7c24 100644
+index da75343..fed96c5 100644
 --- a/src/pkjs/index.js
 +++ b/src/pkjs/index.js
-@@ -1019,6 +1019,11 @@ Pebble.addEventListener('webviewclosed', function (e) {
+@@ -1019,6 +1019,14 @@ Pebble.addEventListener('webviewclosed', function (e) {
  		dict['SETTING_FETCH_INTERVAL'] = fetchInterval;
  	}
  
@@ -804,6 +987,9 @@ index da75343..fcc7c24 100644
 +	if (tempRange === 12 || tempRange === 24) {
 +		dict['SETTING_TEMP_RANGE'] = tempRange;
 +	}
++
++	var theme = extractInt(rawSettings['SETTING_THEME']);
++	if (theme === 0 || theme === 1) dict['SETTING_THEME'] = theme;
 +
  	var showTimezone = extractBool(rawSettings['SETTING_SHOW_TIMEZONE']);
  	if (showTimezone !== null) dict['SETTING_SHOW_TIMEZONE'] = showTimezone;
