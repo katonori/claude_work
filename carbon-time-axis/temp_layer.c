@@ -37,7 +37,6 @@ struct TempLayer {
 	int8_t apparent_hourly[GRAPH_HOURS];
 	uint8_t current_hour;
 	uint8_t hours_remaining;
-	uint8_t range_hours; // 12 or 24
 	bool celsius;
 };
 
@@ -47,13 +46,11 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	int lh = bounds.size.h;
 	int graph_x = GRAPH_OFFSET_X;
 	int graph_w = bounds.size.w - graph_x;
-	int range = tl->range_hours; // hours spanned by the sparkline and axis
+	int range = graph_get_range(); // hours spanned by the sparkline and axis
 
 #if PBL_DISPLAY_HEIGHT >= 228
-	GFont font_sm = fonts_get_system_font(FONT_KEY_GOTHIC_18);
 	GFont font_md = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
 #else
-	GFont font_sm = fonts_get_system_font(FONT_KEY_GOTHIC_14);
 	GFont font_md = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
 #endif
 	graphics_context_set_text_color(ctx, GColorWhite);
@@ -67,19 +64,46 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	snprintf(low_buf, sizeof(low_buf), "%d", (int)tl->low);
 
 #if PBL_DISPLAY_HEIGHT >= 228
-	int sm_h = 20;   // GOTHIC_18 rect height
 	int md_h = 28;   // GOTHIC_24_BOLD rect height
-	int sm_lead = 2; // GOTHIC_18 internal top leading
 	int md_lead = 2; // GOTHIC_24_BOLD internal top leading
+	// High/low fonts, largest first: the first that fits the label column is
+	// used. Rect height and internal top leading are listed per font.
+	static const char *const sm_fonts[] = {FONT_KEY_GOTHIC_24,
+	                                       FONT_KEY_GOTHIC_18};
+	static const int sm_hs[] = {28, 20};
+	static const int sm_leads[] = {2, 2};
 #else
-	int sm_h = 15;   // GOTHIC_14 rect height
 	int md_h = 20;   // GOTHIC_18_BOLD rect height
-	int sm_lead = 1; // GOTHIC_14 internal top leading
 	int md_lead = 2; // GOTHIC_18_BOLD internal top leading
+	static const char *const sm_fonts[] = {FONT_KEY_GOTHIC_18,
+	                                       FONT_KEY_GOTHIC_14};
+	static const int sm_hs[] = {20, 15};
+	static const int sm_leads[] = {2, 1};
 #endif
 	int zone_h =
 	    (lh - 2) / 3; // 2px bottom padding keeps low label off the edge
 	int label_x = GRAPH_OFFSET_X - 4;
+
+	// High and low share one font so they match: the largest candidate that
+	// fits both values in the label column (e.g. 3-digit or negative values
+	// fall back to the smaller font).
+	int sm_idx = 1;
+	for (int i = 0; i < 2; i++) {
+		GFont f = fonts_get_system_font(sm_fonts[i]);
+		GSize hs = graphics_text_layout_get_content_size(
+		    high_buf, f, GRect(0, 0, 144, 40), GTextOverflowModeFill,
+		    GTextAlignmentRight);
+		GSize ls = graphics_text_layout_get_content_size(
+		    low_buf, f, GRect(0, 0, 144, 40), GTextOverflowModeFill,
+		    GTextAlignmentRight);
+		if (hs.w <= label_x && ls.w <= label_x) {
+			sm_idx = i;
+			break;
+		}
+	}
+	GFont font_sm = fonts_get_system_font(sm_fonts[sm_idx]);
+	int sm_h = sm_hs[sm_idx];
+	int sm_lead = sm_leads[sm_idx];
 
 	graphics_draw_text(ctx, high_buf, font_sm,
 	                   GRect(0, (zone_h - sm_h) / 2 - sm_lead, label_x, sm_h),
@@ -322,7 +346,6 @@ TempLayer *temp_layer_create(GRect frame) {
 	tl->low = 0;
 	tl->current_hour = 0;
 	tl->hours_remaining = GRAPH_HOURS;
-	tl->range_hours = GRAPH_HOURS;
 	tl->celsius = false;
 	memset(tl->hourly, 0, sizeof(tl->hourly));
 	memset(tl->apparent_hourly, 0, sizeof(tl->apparent_hourly));
@@ -373,12 +396,5 @@ void temp_layer_set_current_hour(TempLayer *layer, uint8_t current_hour,
 		return;
 	layer->current_hour = current_hour;
 	layer->hours_remaining = hours_remaining;
-	layer_mark_dirty(layer->layer);
-}
-
-void temp_layer_set_range(TempLayer *layer, uint8_t range_hours) {
-	if (!layer)
-		return;
-	layer->range_hours = (range_hours == 12) ? 12 : GRAPH_HOURS;
 	layer_mark_dirty(layer->layer);
 }

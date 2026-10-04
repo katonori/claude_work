@@ -361,7 +361,7 @@ index 2608785..44d445d 100644
  		if (bar_w < 1)
  			bar_w = 1;
 diff --git a/src/c/ui/temp_layer.c b/src/c/ui/temp_layer.c
-index 64db279..3da5013 100644
+index 64db279..cc4a681 100644
 --- a/src/c/ui/temp_layer.c
 +++ b/src/c/ui/temp_layer.c
 @@ -13,6 +13,21 @@
@@ -386,15 +386,73 @@ index 64db279..3da5013 100644
  struct TempLayer {
  	Layer *layer;
  	int16_t current;
-@@ -31,6 +46,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -31,12 +46,11 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  	int lh = bounds.size.h;
  	int graph_x = GRAPH_OFFSET_X;
  	int graph_w = bounds.size.w - graph_x;
 +	int range = graph_get_range(); // hours spanned by the sparkline and axis
  
  #if PBL_DISPLAY_HEIGHT >= 228
- 	GFont font_sm = fonts_get_system_font(FONT_KEY_GOTHIC_18);
-@@ -85,20 +101,20 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+-	GFont font_sm = fonts_get_system_font(FONT_KEY_GOTHIC_18);
+ 	GFont font_md = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
+ #else
+-	GFont font_sm = fonts_get_system_font(FONT_KEY_GOTHIC_14);
+ 	GFont font_md = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
+ #endif
+ 	graphics_context_set_text_color(ctx, GColorWhite);
+@@ -50,20 +64,47 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+ 	snprintf(low_buf, sizeof(low_buf), "%d", (int)tl->low);
+ 
+ #if PBL_DISPLAY_HEIGHT >= 228
+-	int sm_h = 20;   // GOTHIC_18 rect height
+ 	int md_h = 28;   // GOTHIC_24_BOLD rect height
+-	int sm_lead = 2; // GOTHIC_18 internal top leading
+ 	int md_lead = 2; // GOTHIC_24_BOLD internal top leading
++	// High/low fonts, largest first: the first that fits the label column is
++	// used. Rect height and internal top leading are listed per font.
++	static const char *const sm_fonts[] = {FONT_KEY_GOTHIC_24,
++	                                       FONT_KEY_GOTHIC_18};
++	static const int sm_hs[] = {28, 20};
++	static const int sm_leads[] = {2, 2};
+ #else
+-	int sm_h = 15;   // GOTHIC_14 rect height
+ 	int md_h = 20;   // GOTHIC_18_BOLD rect height
+-	int sm_lead = 1; // GOTHIC_14 internal top leading
+ 	int md_lead = 2; // GOTHIC_18_BOLD internal top leading
++	static const char *const sm_fonts[] = {FONT_KEY_GOTHIC_18,
++	                                       FONT_KEY_GOTHIC_14};
++	static const int sm_hs[] = {20, 15};
++	static const int sm_leads[] = {2, 1};
+ #endif
+ 	int zone_h =
+ 	    (lh - 2) / 3; // 2px bottom padding keeps low label off the edge
+ 	int label_x = GRAPH_OFFSET_X - 4;
+ 
++	// High and low share one font so they match: the largest candidate that
++	// fits both values in the label column (e.g. 3-digit or negative values
++	// fall back to the smaller font).
++	int sm_idx = 1;
++	for (int i = 0; i < 2; i++) {
++		GFont f = fonts_get_system_font(sm_fonts[i]);
++		GSize hs = graphics_text_layout_get_content_size(
++		    high_buf, f, GRect(0, 0, 144, 40), GTextOverflowModeFill,
++		    GTextAlignmentRight);
++		GSize ls = graphics_text_layout_get_content_size(
++		    low_buf, f, GRect(0, 0, 144, 40), GTextOverflowModeFill,
++		    GTextAlignmentRight);
++		if (hs.w <= label_x && ls.w <= label_x) {
++			sm_idx = i;
++			break;
++		}
++	}
++	GFont font_sm = fonts_get_system_font(sm_fonts[sm_idx]);
++	int sm_h = sm_hs[sm_idx];
++	int sm_lead = sm_leads[sm_idx];
++
+ 	graphics_draw_text(ctx, high_buf, font_sm,
+ 	                   GRect(0, (zone_h - sm_h) / 2 - sm_lead, label_x, sm_h),
+ 	                   GTextOverflowModeWordWrap, GTextAlignmentRight, NULL);
+@@ -85,20 +126,20 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  	// two lines share the same y-scale.
  	int16_t pts[25];
  	pts[0] = tl->current;
@@ -418,7 +476,7 @@ index 64db279..3da5013 100644
  		if (pts[i] < t_min)
  			t_min = pts[i];
  		if (pts[i] > t_max)
-@@ -112,23 +128,25 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -112,23 +153,25 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  	if (t_range < 1)
  		t_range = 1;
  
@@ -449,7 +507,7 @@ index 64db279..3da5013 100644
  //   Pass 2 — light-colored 1px line drawn on top at the actual-temp position.
  //   Pass 3 — white 1px line for apparent temperature over everything.
  //
-@@ -159,7 +177,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -159,7 +202,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  	              : GColorRed)
  
  	// Pass 1: dark fills
@@ -458,7 +516,7 @@ index 64db279..3da5013 100644
  		int avg = ((int)pts[i - 1] + (int)pts[i]) / 2;
  		graphics_context_set_fill_color(ctx, DARK_TEMP_COLOR(TEMP_TO_F(avg)));
  		int x0 = spx[i - 1], y0 = spy[i - 1], x1 = spx[i], y1 = spy[i];
-@@ -180,7 +198,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -180,7 +223,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  
  	// Pass 2: light-colored actual-temp line on top of the fill
  	graphics_context_set_stroke_width(ctx, 1);
@@ -467,7 +525,7 @@ index 64db279..3da5013 100644
  		int avg = ((int)pts[i - 1] + (int)pts[i]) / 2;
  		graphics_context_set_stroke_color(ctx,
  		                                  LIGHT_TEMP_COLOR(TEMP_TO_F(avg)));
-@@ -190,7 +208,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -190,7 +233,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  
  	// Pass 3: white apparent-temp line over everything
  	graphics_context_set_stroke_color(ctx, GColorWhite);
@@ -476,7 +534,7 @@ index 64db279..3da5013 100644
  		graphics_draw_line(ctx, GPoint(apx[i - 1], apy[i - 1]),
  		                   GPoint(apx[i], apy[i]));
  	}
-@@ -202,14 +220,14 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -202,14 +245,14 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  	// B&W: white actual-temp line + dotted apparent-temp line.
  	graphics_context_set_stroke_width(ctx, 1);
  	graphics_context_set_stroke_color(ctx, GColorWhite);
@@ -493,7 +551,7 @@ index 64db279..3da5013 100644
  		graph_draw_dotted_line(ctx, GPoint(apx[i - 1], apy[i - 1]),
  		                       GPoint(apx[i], apy[i]), 3);
  	}
-@@ -220,7 +238,6 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -220,7 +263,6 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  	// sparkline fill (contrasts against color), white when it falls in the
  	// empty region or there is no sparkline at all.
  	{
@@ -501,7 +559,7 @@ index 64db279..3da5013 100644
  		int offsets[2] = {
  		    (12 - (int)tl->current_hour + 24) % 24, // noon
  		    (24 - (int)tl->current_hour) % 24,      // midnight
-@@ -228,14 +245,69 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -228,14 +270,69 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  		graphics_context_set_stroke_width(ctx, 1);
  		for (int i = 0; i < 2; i++) {
  			int off = offsets[i];
