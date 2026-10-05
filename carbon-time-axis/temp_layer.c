@@ -135,11 +135,17 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 	for (int i = 0; i < range; i++)
 		apt[i + 1] = tl->apparent_hourly[i];
 
-	// Bound the scale to the actual values in the two 24-hour arrays so the
-	// lines always fill the available vertical space correctly.
-	int16_t t_min = pts[0] < apt[0] ? pts[0] : apt[0];
-	int16_t t_max = pts[0] > apt[0] ? pts[0] : apt[0];
-	for (int i = 1; i <= range; i++) {
+	// Scale the graph to the day's low/high so the line height matches the
+	// high/low labels. The scale is only widened when a plotted value (actual
+	// or apparent, e.g. the part of the window falling on the next day) lies
+	// outside the day's range, so the lines never leave the graph. Without a
+	// valid day range, fall back to the plotted values.
+	bool have_day = tl->high > tl->low;
+	int16_t t_min = have_day ? tl->low : pts[0];
+	int16_t t_max = have_day ? tl->high : pts[0];
+	int plotted =
+	    (int)tl->hours_remaining < range ? (int)tl->hours_remaining : range;
+	for (int i = 0; i <= plotted; i++) {
 		if (pts[i] < t_min)
 			t_min = pts[i];
 		if (pts[i] > t_max)

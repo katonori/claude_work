@@ -361,7 +361,7 @@ index 2608785..44d445d 100644
  		if (bar_w < 1)
  			bar_w = 1;
 diff --git a/src/c/ui/temp_layer.c b/src/c/ui/temp_layer.c
-index 64db279..cc4a681 100644
+index 64db279..3e57bd1 100644
 --- a/src/c/ui/temp_layer.c
 +++ b/src/c/ui/temp_layer.c
 @@ -13,6 +13,21 @@
@@ -452,7 +452,7 @@ index 64db279..cc4a681 100644
  	graphics_draw_text(ctx, high_buf, font_sm,
  	                   GRect(0, (zone_h - sm_h) / 2 - sm_lead, label_x, sm_h),
  	                   GTextOverflowModeWordWrap, GTextAlignmentRight, NULL);
-@@ -85,20 +126,20 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -85,20 +126,26 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  	// two lines share the same y-scale.
  	int16_t pts[25];
  	pts[0] = tl->current;
@@ -467,16 +467,26 @@ index 64db279..cc4a681 100644
 +	for (int i = 0; i < range; i++)
  		apt[i + 1] = tl->apparent_hourly[i];
  
- 	// Bound the scale to the actual values in the two 24-hour arrays so the
- 	// lines always fill the available vertical space correctly.
- 	int16_t t_min = pts[0] < apt[0] ? pts[0] : apt[0];
- 	int16_t t_max = pts[0] > apt[0] ? pts[0] : apt[0];
+-	// Bound the scale to the actual values in the two 24-hour arrays so the
+-	// lines always fill the available vertical space correctly.
+-	int16_t t_min = pts[0] < apt[0] ? pts[0] : apt[0];
+-	int16_t t_max = pts[0] > apt[0] ? pts[0] : apt[0];
 -	for (int i = 1; i < 25; i++) {
-+	for (int i = 1; i <= range; i++) {
++	// Scale the graph to the day's low/high so the line height matches the
++	// high/low labels. The scale is only widened when a plotted value (actual
++	// or apparent, e.g. the part of the window falling on the next day) lies
++	// outside the day's range, so the lines never leave the graph. Without a
++	// valid day range, fall back to the plotted values.
++	bool have_day = tl->high > tl->low;
++	int16_t t_min = have_day ? tl->low : pts[0];
++	int16_t t_max = have_day ? tl->high : pts[0];
++	int plotted =
++	    (int)tl->hours_remaining < range ? (int)tl->hours_remaining : range;
++	for (int i = 0; i <= plotted; i++) {
  		if (pts[i] < t_min)
  			t_min = pts[i];
  		if (pts[i] > t_max)
-@@ -112,23 +153,25 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -112,23 +159,25 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  	if (t_range < 1)
  		t_range = 1;
  
@@ -507,7 +517,7 @@ index 64db279..cc4a681 100644
  //   Pass 2 — light-colored 1px line drawn on top at the actual-temp position.
  //   Pass 3 — white 1px line for apparent temperature over everything.
  //
-@@ -159,7 +202,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -159,7 +208,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  	              : GColorRed)
  
  	// Pass 1: dark fills
@@ -516,7 +526,7 @@ index 64db279..cc4a681 100644
  		int avg = ((int)pts[i - 1] + (int)pts[i]) / 2;
  		graphics_context_set_fill_color(ctx, DARK_TEMP_COLOR(TEMP_TO_F(avg)));
  		int x0 = spx[i - 1], y0 = spy[i - 1], x1 = spx[i], y1 = spy[i];
-@@ -180,7 +223,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -180,7 +229,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  
  	// Pass 2: light-colored actual-temp line on top of the fill
  	graphics_context_set_stroke_width(ctx, 1);
@@ -525,7 +535,7 @@ index 64db279..cc4a681 100644
  		int avg = ((int)pts[i - 1] + (int)pts[i]) / 2;
  		graphics_context_set_stroke_color(ctx,
  		                                  LIGHT_TEMP_COLOR(TEMP_TO_F(avg)));
-@@ -190,7 +233,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -190,7 +239,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  
  	// Pass 3: white apparent-temp line over everything
  	graphics_context_set_stroke_color(ctx, GColorWhite);
@@ -534,7 +544,7 @@ index 64db279..cc4a681 100644
  		graphics_draw_line(ctx, GPoint(apx[i - 1], apy[i - 1]),
  		                   GPoint(apx[i], apy[i]));
  	}
-@@ -202,14 +245,14 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -202,14 +251,14 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  	// B&W: white actual-temp line + dotted apparent-temp line.
  	graphics_context_set_stroke_width(ctx, 1);
  	graphics_context_set_stroke_color(ctx, GColorWhite);
@@ -551,7 +561,7 @@ index 64db279..cc4a681 100644
  		graph_draw_dotted_line(ctx, GPoint(apx[i - 1], apy[i - 1]),
  		                       GPoint(apx[i], apy[i]), 3);
  	}
-@@ -220,7 +263,6 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -220,7 +269,6 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  	// sparkline fill (contrasts against color), white when it falls in the
  	// empty region or there is no sparkline at all.
  	{
@@ -559,7 +569,7 @@ index 64db279..cc4a681 100644
  		int offsets[2] = {
  		    (12 - (int)tl->current_hour + 24) % 24, // noon
  		    (24 - (int)tl->current_hour) % 24,      // midnight
-@@ -228,14 +270,69 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
+@@ -228,14 +276,69 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
  		graphics_context_set_stroke_width(ctx, 1);
  		for (int i = 0; i < 2; i++) {
  			int off = offsets[i];
