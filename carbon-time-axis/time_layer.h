@@ -12,7 +12,7 @@
 #include <pebble.h>
 
 // Time block layout constants — all tweakable values live here.
-// The line under the time shows "<city>  <date>". TL_SMALL_H is its rect height
+// The line under the time shows "<date>  <city>". TL_SMALL_H is its rect height
 // and TL_DATE_LEAD the font's blank top leading, which the rect overlaps with
 // the time canvas above it.
 #if PBL_DISPLAY_HEIGHT <= 168

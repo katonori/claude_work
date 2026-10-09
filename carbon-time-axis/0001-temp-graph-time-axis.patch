@@ -769,7 +769,7 @@ index 0000000..7936801
 +Layer *theme_layer_get_layer(ThemeLayer *layer);
 +void theme_layer_set_light(ThemeLayer *layer, bool light);
 diff --git a/src/c/ui/time_layer.c b/src/c/ui/time_layer.c
-index 30df259..cb06333 100644
+index 30df259..46f2382 100644
 --- a/src/c/ui/time_layer.c
 +++ b/src/c/ui/time_layer.c
 @@ -15,8 +15,11 @@
@@ -791,7 +791,7 @@ index 30df259..cb06333 100644
  	char ampm_buf[4];
 -	char date_buf[32];
 +	char date_part[32]; // formatted date only
-+	char date_buf[72];  // "<city>  <date>" as shown
++	char date_buf[72];  // "<date>  <city>" as shown
  };
  
  static void prv_remove_leading_zero(char *buf, size_t len) {
@@ -898,7 +898,7 @@ index 30df259..cb06333 100644
 +}
 +#endif
 +
-+// Build the line under the time: "<city>  <date>". When the pair is too wide
++// Build the line under the time: "<date>  <city>". When the pair is too wide
 +// for the screen the city is shortened (at a UTF-8 character boundary, with an
 +// ellipsis); if even one character does not fit, only the date is shown.
 +static void prv_compose_date_line(TimeLayer *layer) {
@@ -910,9 +910,9 @@ index 30df259..cb06333 100644
 +		// Never cut in the middle of a multi-byte character
 +		if (n < city_len && (layer->city_buf[n] & 0xC0) == 0x80)
 +			continue;
-+		snprintf(layer->date_buf, sizeof(layer->date_buf), "%.*s%s  %s", n,
-+		         layer->city_buf, n < city_len ? "\xe2\x80\xa6" : "",
-+		         layer->date_part);
++		snprintf(layer->date_buf, sizeof(layer->date_buf), "%s  %.*s%s",
++		         layer->date_part, n, layer->city_buf,
++		         n < city_len ? "\xe2\x80\xa6" : "");
 +		GSize sz = graphics_text_layout_get_content_size(
 +		    layer->date_buf, font, GRect(0, 0, 400, TL_SMALL_H),
 +		    GTextOverflowModeFill, GTextAlignmentCenter);
@@ -1057,7 +1057,7 @@ index 30df259..cb06333 100644
 +	prv_compose_date_line(layer);
  }
 diff --git a/src/c/ui/time_layer.h b/src/c/ui/time_layer.h
-index c18168b..7a81fea 100644
+index c18168b..ac1727a 100644
 --- a/src/c/ui/time_layer.h
 +++ b/src/c/ui/time_layer.h
 @@ -12,30 +12,45 @@
@@ -1065,7 +1065,7 @@ index c18168b..7a81fea 100644
  
  // Time block layout constants — all tweakable values live here.
 -// City and date always share the same font and height.
-+// The line under the time shows "<city>  <date>". TL_SMALL_H is its rect height
++// The line under the time shows "<date>  <city>". TL_SMALL_H is its rect height
 +// and TL_DATE_LEAD the font's blank top leading, which the rect overlaps with
 +// the time canvas above it.
  #if PBL_DISPLAY_HEIGHT <= 168

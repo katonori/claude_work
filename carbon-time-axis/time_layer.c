@@ -29,7 +29,7 @@ struct TimeLayer {
 	char tz_override[8]; // set by time_layer_set_timezone; overrides strftime
 	char ampm_buf[4];
 	char date_part[32]; // formatted date only
-	char date_buf[72];  // "<city>  <date>" as shown
+	char date_buf[72];  // "<date>  <city>" as shown
 };
 
 static void prv_remove_leading_zero(char *buf, size_t len) {
@@ -144,7 +144,7 @@ static void prv_time_canvas_update(Layer *layer, GContext *ctx) {
 }
 #endif
 
-// Build the line under the time: "<city>  <date>". When the pair is too wide
+// Build the line under the time: "<date>  <city>". When the pair is too wide
 // for the screen the city is shortened (at a UTF-8 character boundary, with an
 // ellipsis); if even one character does not fit, only the date is shown.
 static void prv_compose_date_line(TimeLayer *layer) {
@@ -156,9 +156,9 @@ static void prv_compose_date_line(TimeLayer *layer) {
 		// Never cut in the middle of a multi-byte character
 		if (n < city_len && (layer->city_buf[n] & 0xC0) == 0x80)
 			continue;
-		snprintf(layer->date_buf, sizeof(layer->date_buf), "%.*s%s  %s", n,
-		         layer->city_buf, n < city_len ? "\xe2\x80\xa6" : "",
-		         layer->date_part);
+		snprintf(layer->date_buf, sizeof(layer->date_buf), "%s  %.*s%s",
+		         layer->date_part, n, layer->city_buf,
+		         n < city_len ? "\xe2\x80\xa6" : "");
 		GSize sz = graphics_text_layout_get_content_size(
 		    layer->date_buf, font, GRect(0, 0, 400, TL_SMALL_H),
 		    GTextOverflowModeFill, GTextAlignmentCenter);
